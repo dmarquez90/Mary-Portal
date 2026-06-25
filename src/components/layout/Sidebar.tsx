@@ -15,27 +15,46 @@ import {
   LogOut,
   Menu,
   X,
+  BookOpen,
+  BookText,
+  TrendingUp,
+  ClipboardList,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const NAV = [
-  { href: "/dashboard",                icon: LayoutDashboard, label: "Inicio"         },
-  { href: "/dashboard/ventas",         icon: FileText,        label: "Ventas"         },
-  { href: "/dashboard/compras",        icon: ShoppingCart,    label: "Compras"        },
-  { href: "/dashboard/clientes",       icon: Users,           label: "Clientes"       },
-  { href: "/dashboard/proveedores",    icon: Truck,           label: "Proveedores"    },
-  { href: "/dashboard/inventario",     icon: Package,         label: "Inventario"     },
-  { href: "/dashboard/reportes",       icon: BarChart3,       label: "Reportes"       },
-  { href: "/dashboard/empresa",        icon: Building2,       label: "Mi Empresa"     },
-  { href: "/dashboard/configuracion",  icon: Settings,        label: "Configuración"  },
+const NAV_PRINCIPAL = [
+  { href: "/dashboard",             icon: LayoutDashboard, label: "Inicio"       },
+  { href: "/dashboard/ventas",      icon: FileText,        label: "Ventas"       },
+  { href: "/dashboard/compras",     icon: ShoppingCart,    label: "Compras"      },
+  { href: "/dashboard/clientes",    icon: Users,           label: "Clientes"     },
+  { href: "/dashboard/proveedores", icon: Truck,           label: "Proveedores"  },
+  { href: "/dashboard/inventario",  icon: Package,         label: "Inventario"   },
+  { href: "/dashboard/reportes",    icon: BarChart3,       label: "Reportes"     },
+];
+
+const NAV_CONTABILIDAD = [
+  { href: "/dashboard/contabilidad",              icon: ClipboardList, label: "Asientos (Diario)" },
+  { href: "/dashboard/contabilidad/plan-cuentas", icon: BookText,      label: "Plan de Cuentas"   },
+  { href: "/dashboard/contabilidad/mayor",        icon: BookOpen,      label: "Libro Mayor"       },
+  { href: "/dashboard/contabilidad/balance",      icon: TrendingUp,    label: "Balance"           },
+];
+
+const NAV_BOTTOM = [
+  { href: "/dashboard/empresa",       icon: Building2, label: "Mi Empresa"    },
+  { href: "/dashboard/configuracion", icon: Settings,  label: "Configuración" },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [contabOpen, setContabOpen] = useState(
+    pathname.startsWith("/dashboard/contabilidad")
+  );
 
   async function handleLogout() {
     const { createClient } = await import("@/lib/supabase/client");
@@ -45,6 +64,29 @@ export default function Sidebar() {
     router.push("/auth/login");
     router.refresh();
   }
+
+  const NavLink = ({ href, icon: Icon, label }: {
+    href: string; icon: React.ElementType; label: string
+  }) => {
+    const active = href === "/dashboard"
+      ? pathname === "/dashboard"
+      : pathname === href || pathname.startsWith(href + "/");
+    return (
+      <Link
+        href={href}
+        onClick={() => setOpen(false)}
+        className={cn(
+          "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+          active
+            ? "bg-white/15 text-white"
+            : "text-blue-200 hover:bg-white/10 hover:text-white"
+        )}
+      >
+        <Icon className="w-5 h-5 flex-shrink-0" />
+        {label}
+      </Link>
+    );
+  };
 
   return (
     <>
@@ -73,36 +115,57 @@ export default function Sidebar() {
       >
         {/* Logo */}
         <div className="px-6 py-6 border-b border-white/10">
-          <span className="font-display text-xl font-bold">
-            SARA
-          </span>
+          <span className="font-display text-xl font-bold">SARA</span>
           <p className="text-blue-300 text-xs mt-1">Sistema Administrativo</p>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 py-4 space-y-1 px-3 overflow-y-auto">
-          {NAV.map(({ href, icon: Icon, label }) => {
-            const active =
-              href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname.startsWith(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                  active
-                    ? "bg-white/15 text-white"
-                    : "text-blue-200 hover:bg-white/10 hover:text-white"
-                )}
-              >
-                <Icon className="w-5 h-5 flex-shrink-0" />
-                {label}
-              </Link>
-            );
-          })}
+
+          {/* Módulos principales */}
+          {NAV_PRINCIPAL.map(({ href, icon, label }) => (
+            <NavLink key={href} href={href} icon={icon} label={label} />
+          ))}
+
+          {/* Sección Contabilidad */}
+          <div className="pt-3">
+            <p className="text-xs font-semibold text-blue-400/60 uppercase tracking-wider px-3 mb-2">
+              Contabilidad
+            </p>
+            <button
+              onClick={() => setContabOpen(!contabOpen)}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full",
+                pathname.startsWith("/dashboard/contabilidad")
+                  ? "bg-white/15 text-white"
+                  : "text-blue-200 hover:bg-white/10 hover:text-white"
+              )}
+            >
+              <BookOpen className="w-5 h-5 flex-shrink-0" />
+              <span className="flex-1 text-left">Contabilidad</span>
+              {contabOpen
+                ? <ChevronDown className="w-4 h-4" />
+                : <ChevronRight className="w-4 h-4" />
+              }
+            </button>
+
+            {contabOpen && (
+              <div className="ml-4 mt-1 space-y-1 border-l border-white/10 pl-3">
+                {NAV_CONTABILIDAD.map(({ href, icon, label }) => (
+                  <NavLink key={href} href={href} icon={icon} label={label} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Mi Empresa y Configuración */}
+          <div className="pt-3">
+            <div className="border-t border-white/10 mb-3" />
+            {NAV_BOTTOM.map(({ href, icon, label }) => (
+              <NavLink key={href} href={href} icon={icon} label={label} />
+            ))}
+          </div>
+
         </nav>
 
         {/* Logout */}
