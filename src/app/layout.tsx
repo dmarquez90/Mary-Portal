@@ -3,9 +3,9 @@ import { Toaster } from "sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FacturaNIC – Sistema Contable para Nicaragua",
+  title: "SARA – Sistema Automatizado de Registro Administrativo",
   description:
-    "Sistema de facturación y contabilidad para empresas nicaragüenses. Cumple con estándares de la DGI.",
+    "Sistema contable y de facturación para empresas nicaragüenses. Cumple con estándares de la DGI.",
 };
 
 export default function RootLayout({
