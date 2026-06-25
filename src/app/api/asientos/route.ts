@@ -2,33 +2,36 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-// GET — Listar asientos (Libro Diario)
+// Helper: obtener empresa_id del usuario autenticado
+async function getEmpresaId(supabase: any, userId: string): Promise<string | null> {
+  const [{ data: en }, { data: ej }] = await Promise.all([
+    supabase.from('empresas_persona_natural').select('id').eq('user_id', userId).single(),
+    supabase.from('empresas_juridicas').select('id').eq('user_id', userId).single(),
+  ])
+  return en?.id ?? ej?.id ?? null
+}
+
+// GET – Listar asientos (Libro Diario)
 export async function GET(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { data: empresa } = await supabase
-    .from('empresas')
-    .select('id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
+  const empresaId = await getEmpresaId(supabase, user.id)
+  if (!empresaId) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
   const { searchParams } = new URL(request.url)
   const anio = searchParams.get('anio') ? parseInt(searchParams.get('anio')!) : new Date().getFullYear()
   const mes = searchParams.get('mes') ? parseInt(searchParams.get('mes')!) : null
   const estado = searchParams.get('estado')
-  const id = searchParams.get('id') // Un asiento específico con su detalle
+  const id = searchParams.get('id')
 
-  // Detalle de un asiento específico
   if (id) {
     const { data: asiento } = await supabase
       .from('asientos_contables')
       .select('*')
       .eq('id', id)
-      .eq('empresa_id', empresa.id)
+      .eq('empresa_id', empresaId)
       .single()
 
     const { data: detalle } = await supabase
@@ -40,11 +43,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ asiento, detalle })
   }
 
-  // Listado con filtros
   let query = supabase
     .from('asientos_contables')
     .select('*')
-    .eq('empresa_id', empresa.id)
+    .eq('empresa_id', empresaId)
     .eq('periodo_anio', anio)
     .order('fecha', { ascending: true })
     .order('numero', { ascending: true })
@@ -58,19 +60,14 @@ export async function GET(request: Request) {
   return NextResponse.json({ asientos: data })
 }
 
-// POST — Crear asiento (borrador o directamente contabilizado)
+// POST – Crear asiento (borrador o directamente contabilizado)
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { data: empresa } = await supabase
-    .from('empresas')
-    .select('id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
+  const empresaId = await getEmpresaId(supabase, user.id)
+  if (!empresaId) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
   const body = await request.json()
   const { fecha, concepto, tipo = 'manual', referencia_tipo, referencia_id, referencia_num, lineas, contabilizar = false } = body
@@ -79,7 +76,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Faltan campos: fecha, concepto y al menos 2 líneas' }, { status: 400 })
   }
 
-  // Validar partida doble
   const totalDebe = lineas.reduce((s: number, l: any) => s + (parseFloat(l.debe) || 0), 0)
   const totalHaber = lineas.reduce((s: number, l: any) => s + (parseFloat(l.haber) || 0), 0)
 
@@ -93,11 +89,10 @@ export async function POST(request: Request) {
   const periodo_anio = fechaDate.getFullYear()
   const periodo_mes = fechaDate.getMonth() + 1
 
-  // Verificar que el período esté abierto
   const { data: periodo } = await supabase
     .from('periodos_contables')
     .select('estado')
-    .eq('empresa_id', empresa.id)
+    .eq('empresa_id', empresaId)
     .eq('anio', periodo_anio)
     .eq('mes', periodo_mes)
     .single()
@@ -106,20 +101,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `El período ${periodo_mes}/${periodo_anio} está cerrado` }, { status: 400 })
   }
 
-  // Generar número de asiento
   const { data: seqData, error: seqError } = await supabase
-    .rpc('next_numero_asiento', { p_empresa_id: empresa.id })
+    .rpc('next_numero_asiento', { p_empresa_id: empresaId })
 
   if (seqError) return NextResponse.json({ error: seqError.message }, { status: 500 })
   const numero = seqData
 
   const estado = contabilizar ? 'contabilizado' : 'borrador'
 
-  // Insertar el asiento
   const { data: asiento, error: asientoError } = await supabase
     .from('asientos_contables')
     .insert({
-      empresa_id: empresa.id,
+      empresa_id: empresaId,
       numero,
       fecha,
       periodo_anio,
@@ -139,10 +132,9 @@ export async function POST(request: Request) {
 
   if (asientoError) return NextResponse.json({ error: asientoError.message }, { status: 500 })
 
-  // Insertar líneas de detalle
   const lineasConIds = lineas.map((l: any, idx: number) => ({
     asiento_id: asiento.id,
-    empresa_id: empresa.id,
+    empresa_id: empresaId,
     cuenta_id: l.cuenta_id,
     codigo_cuenta: l.codigo_cuenta,
     nombre_cuenta: l.nombre_cuenta,
@@ -161,14 +153,14 @@ export async function POST(request: Request) {
   return NextResponse.json({ asiento, ok: true })
 }
 
-// PATCH — Contabilizar borrador o anular asiento
+// PATCH – Contabilizar borrador o anular asiento
 export async function PATCH(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const body = await request.json()
-  const { id, action } = body // action: 'contabilizar' | 'anular'
+  const { id, action } = body
 
   if (!id || !action) return NextResponse.json({ error: 'ID y acción requeridos' }, { status: 400 })
 
@@ -180,7 +172,6 @@ export async function PATCH(request: Request) {
       .select()
       .single()
 
-    // El trigger en Supabase actualiza los saldos del mayor automáticamente
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ asiento: data, ok: true })
   }

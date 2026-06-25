@@ -3,18 +3,22 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+// Helper: obtener empresa_id del usuario autenticado
+async function getEmpresaId(supabase: any, userId: string): Promise<string | null> {
+  const [{ data: en }, { data: ej }] = await Promise.all([
+    supabase.from('empresas_persona_natural').select('id').eq('user_id', userId).single(),
+    supabase.from('empresas_juridicas').select('id').eq('user_id', userId).single(),
+  ])
+  return en?.id ?? ej?.id ?? null
+}
+
 export async function GET(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { data: empresa } = await supabase
-    .from('empresas')
-    .select('id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
+  const empresaId = await getEmpresaId(supabase, user.id)
+  if (!empresaId) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
   const { searchParams } = new URL(request.url)
   const tipo = searchParams.get('tipo') // 'mayor' | 'balance'
@@ -22,41 +26,38 @@ export async function GET(request: Request) {
   const mes = searchParams.get('mes') ? parseInt(searchParams.get('mes')!) : null
   const cuenta_id = searchParams.get('cuenta_id')
 
-  // ── LIBRO MAYOR — movimientos de una cuenta específica ──────
+  // ── LIBRO MAYOR – movimientos de una cuenta específica ──────
   if (tipo === 'mayor' && cuenta_id) {
-    // Saldo inicial = suma de saldos anteriores al mes consultado
     const { data: saldosAnteriores } = await supabase
       .from('saldos_mayor')
       .select('total_debe, total_haber')
-      .eq('empresa_id', empresa.id)
+      .eq('empresa_id', empresaId)
       .eq('cuenta_id', cuenta_id)
-      .lt('anio', anio) // todos los años anteriores
+      .lt('anio', anio)
 
     let saldoInicialDebe = 0
     let saldoInicialHaber = 0
 
-    saldosAnteriores?.forEach((s) => {
+    saldosAnteriores?.forEach((s: any) => {
       saldoInicialDebe += s.total_debe
       saldoInicialHaber += s.total_haber
     })
 
     if (mes) {
-      // También sumar meses anteriores del mismo año
       const { data: mesesAnteriores } = await supabase
         .from('saldos_mayor')
         .select('total_debe, total_haber')
-        .eq('empresa_id', empresa.id)
+        .eq('empresa_id', empresaId)
         .eq('cuenta_id', cuenta_id)
         .eq('anio', anio)
         .lt('mes', mes)
 
-      mesesAnteriores?.forEach((s) => {
+      mesesAnteriores?.forEach((s: any) => {
         saldoInicialDebe += s.total_debe
         saldoInicialHaber += s.total_haber
       })
     }
 
-    // Movimientos del período
     let movQuery = supabase
       .from('asientos_detalle')
       .select(`
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
           id, numero, fecha, concepto, estado, periodo_anio, periodo_mes
         )
       `)
-      .eq('empresa_id', empresa.id)
+      .eq('empresa_id', empresaId)
       .eq('cuenta_id', cuenta_id)
       .eq('asientos_contables.estado', 'contabilizado')
       .eq('asientos_contables.periodo_anio', anio)
@@ -86,7 +87,7 @@ export async function GET(request: Request) {
     })
   }
 
-  // ── BALANCE DE COMPROBACIÓN — todas las cuentas con movimiento ──
+  // ── BALANCE DE COMPROBACIÓN – todas las cuentas con movimiento ──
   if (tipo === 'balance') {
     let query = supabase
       .from('saldos_mayor')
@@ -94,7 +95,7 @@ export async function GET(request: Request) {
         cuenta_id, codigo_cuenta, total_debe, total_haber, saldo_final,
         plan_cuentas!inner(nombre, tipo, naturaleza, nivel)
       `)
-      .eq('empresa_id', empresa.id)
+      .eq('empresa_id', empresaId)
       .eq('anio', anio)
       .order('codigo_cuenta')
 
@@ -103,9 +104,7 @@ export async function GET(request: Request) {
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // Si es rango de meses, agregar por cuenta
     if (!mes) {
-      // Agrupar por cuenta sumando todos los meses del año
       const agrupado: Record<string, any> = {}
       data?.forEach((row: any) => {
         if (!agrupado[row.cuenta_id]) {
@@ -128,7 +127,7 @@ export async function GET(request: Request) {
         ...c,
         saldo_deudor: c.naturaleza === 'deudora'
           ? Math.max(0, c.total_debe - c.total_haber)
-          : Math.max(0, c.total_haber - c.total_debe) * -1, // negativo = deudor
+          : Math.max(0, c.total_haber - c.total_debe) * -1,
         saldo_acreedor: c.naturaleza === 'acreedora'
           ? Math.max(0, c.total_haber - c.total_debe)
           : Math.max(0, c.total_debe - c.total_haber) * -1,
@@ -143,7 +142,6 @@ export async function GET(request: Request) {
       })
     }
 
-    // Mes específico
     const cuentas = data?.map((row: any) => ({
       cuenta_id: row.cuenta_id,
       codigo_cuenta: row.codigo_cuenta,
@@ -161,8 +159,8 @@ export async function GET(request: Request) {
         : 0,
     }))
 
-    const totalDebe = cuentas?.reduce((s, c) => s + c.total_debe, 0) ?? 0
-    const totalHaber = cuentas?.reduce((s, c) => s + c.total_haber, 0) ?? 0
+    const totalDebe = cuentas?.reduce((s: number, c: any) => s + c.total_debe, 0) ?? 0
+    const totalHaber = cuentas?.reduce((s: number, c: any) => s + c.total_haber, 0) ?? 0
 
     return NextResponse.json({
       cuentas,
@@ -177,7 +175,7 @@ export async function GET(request: Request) {
       total_debe, total_haber,
       plan_cuentas!inner(tipo, nivel)
     `)
-    .eq('empresa_id', empresa.id)
+    .eq('empresa_id', empresaId)
     .eq('anio', anio)
     .eq('plan_cuentas.nivel', 3)
 

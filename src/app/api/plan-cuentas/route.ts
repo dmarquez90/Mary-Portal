@@ -3,19 +3,23 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { seedPlanCuentas } from '@/lib/seed-plan-cuentas'
 
-// GET — Obtener todas las cuentas de la empresa
+// Helper: obtener empresa_id del usuario autenticado
+async function getEmpresaId(supabase: any, userId: string): Promise<string | null> {
+  const [{ data: en }, { data: ej }] = await Promise.all([
+    supabase.from('empresas_persona_natural').select('id').eq('user_id', userId).single(),
+    supabase.from('empresas_juridicas').select('id').eq('user_id', userId).single(),
+  ])
+  return en?.id ?? ej?.id ?? null
+}
+
+// GET – Obtener todas las cuentas de la empresa
 export async function GET(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { data: empresa } = await supabase
-    .from('empresas')
-    .select('id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
+  const empresaId = await getEmpresaId(supabase, user.id)
+  if (!empresaId) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
   const { searchParams } = new URL(request.url)
   const tipo = searchParams.get('tipo')
@@ -25,7 +29,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from('plan_cuentas')
     .select('*')
-    .eq('empresa_id', empresa.id)
+    .eq('empresa_id', empresaId)
     .eq('activa', true)
     .order('codigo')
 
@@ -39,30 +43,23 @@ export async function GET(request: Request) {
   return NextResponse.json({ cuentas: data })
 }
 
-// POST — Crear nueva cuenta o inicializar plan predeterminado
+// POST – Crear nueva cuenta o inicializar plan predeterminado
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const { data: empresa } = await supabase
-    .from('empresas')
-    .select('id')
-    .eq('user_id', user.id)
-    .single()
-
-  if (!empresa) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
+  const empresaId = await getEmpresaId(supabase, user.id)
+  if (!empresaId) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
   const body = await request.json()
 
-  // Si se solicita la inicialización con el plan predeterminado
   if (body.action === 'seed') {
-    const { error } = await seedPlanCuentas(supabase, empresa.id)
+    const { error } = await seedPlanCuentas(supabase, empresaId)
     if (error) return NextResponse.json({ error }, { status: 500 })
     return NextResponse.json({ ok: true, message: 'Plan de cuentas inicializado' })
   }
 
-  // Crear una cuenta manualmente
   const { codigo, nombre, tipo, naturaleza, nivel, cuenta_padre_id, descripcion, permite_movimiento } = body
 
   if (!codigo || !nombre || !tipo || !naturaleza || !nivel) {
@@ -72,7 +69,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from('plan_cuentas')
     .insert({
-      empresa_id: empresa.id,
+      empresa_id: empresaId,
       codigo, nombre, tipo, naturaleza, nivel,
       cuenta_padre_id: cuenta_padre_id || null,
       descripcion: descripcion || null,
@@ -85,7 +82,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ cuenta: data })
 }
 
-// PATCH — Editar cuenta
+// PATCH – Editar cuenta
 export async function PATCH(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
