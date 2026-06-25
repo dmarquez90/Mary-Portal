@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   const lastDay  = new Date(anio, mes, 0).toISOString().split("T")[0];
 
   // ── Obtener datos según tipo ──
-  if (tipo === "ingresos" || tipo === "ventas") {
+  if (tipo === "ingresos" || tipo === "ventas" || tipo === "libro_ventas") {
     const { data: facturas } = await supabase
       .from("facturas")
       .select("*, cliente:clientes(nombre, ruc, cedula)")
@@ -63,10 +63,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ventas, empresa, mes, anio });
   }
 
-  if (tipo === "compras" || tipo === "credito" || tipo === "retenciones") {
+  if (tipo === "compras" || tipo === "credito" || tipo === "retenciones" || tipo === "libro_compras") {
     const { data: comprasData } = await supabase
       .from("compras")
-      .select("*, proveedor:proveedores(nombre, ruc)")
+      .select("*, proveedor:proveedores(nombre, ruc, tipo_persona)")
       .in("empresa_id", ids)
       .gte("fecha_compra", firstDay)
       .lte("fecha_compra", lastDay)
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
       subtotal:          Number(c.subtotal),
       iva_total:         Number(c.iva_total),
       total:             Number(c.total),
-      tipo_proveedor:    "juridica", // default; se puede ampliar con campo en proveedores
+      tipo_proveedor:    (c.proveedor as { tipo_persona?: string } | null)?.tipo_persona ?? "juridica",
     }));
 
     return NextResponse.json({ compras, empresa, mes, anio });
