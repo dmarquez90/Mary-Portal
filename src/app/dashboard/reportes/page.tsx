@@ -28,8 +28,8 @@ export default function ReportesPage() {
       if (!user) return;
 
       const [{ data: en }, { data: ej }] = await Promise.all([
-        supabase.from("empresas_persona_natural").select("id").eq("user_id", user.id).single(),
-        supabase.from("empresas_juridicas").select("id").eq("user_id", user.id).single(),
+        supabase.from("empresas_persona_natural").select("id").eq("user_id", user.id).maybeSingle(),
+        supabase.from("empresas_juridicas").select("id").eq("user_id", user.id).maybeSingle(),
       ]);
       const ids = [en?.id, ej?.id].filter(Boolean) as string[];
 

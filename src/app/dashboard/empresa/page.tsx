@@ -15,8 +15,8 @@ export default function EmpresaPage() {
       if (!user) return;
 
       const [{ data: natural }, { data: juridica }] = await Promise.all([
-        supabase.from("empresas_persona_natural").select("*").eq("user_id", user.id).single(),
-        supabase.from("empresas_juridicas").select("*").eq("user_id", user.id).single(),
+        supabase.from("empresas_persona_natural").select("*").eq("user_id", user.id).maybeSingle(),
+        supabase.from("empresas_juridicas").select("*").eq("user_id", user.id).maybeSingle(),
       ]);
 
       setData({ natural: natural as Record<string,string>|null, juridica: juridica as Record<string,string>|null, userId: user.id });

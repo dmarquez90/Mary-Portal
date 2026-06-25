@@ -35,8 +35,8 @@ export default function DashboardPage() {
 
       // Buscar empresa - capturar errores explícitamente
       const [resNatural, resJuridica] = await Promise.all([
-        supabase.from("empresas_persona_natural").select("id, nombre_completo").eq("user_id", user.id).single(),
-        supabase.from("empresas_juridicas").select("id, nombre_empresa").eq("user_id", user.id).single(),
+        supabase.from("empresas_persona_natural").select("id, nombre_completo").eq("user_id", user.id).maybeSingle(),
+        supabase.from("empresas_juridicas").select("id, nombre_empresa").eq("user_id", user.id).maybeSingle(),
       ]);
 
       const en = resNatural.data;
