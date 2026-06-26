@@ -164,7 +164,7 @@ export async function seedPlanCuentas(
 
       const cuentasConId = await Promise.all(
         cuentasNivel.map(async (cuenta) => {
-          let cuenta_padre_id = null
+          let padre_id = null
 
           if (cuenta.nivel > 1) {
             const partes = cuenta.codigo.split('.')
@@ -177,10 +177,20 @@ export async function seedPlanCuentas(
               .eq('codigo', codigoPadre)
               .single()
 
-            cuenta_padre_id = padre?.id ?? null
+            padre_id = padre?.id ?? null
           }
 
-          return { ...cuenta, empresa_id: empresaId, cuenta_padre_id }
+          return {
+            empresa_id: empresaId,
+            codigo: cuenta.codigo,
+            nombre: cuenta.nombre,
+            tipo: cuenta.tipo,
+            naturaleza: cuenta.naturaleza,
+            nivel: cuenta.nivel,
+            permite_movimiento: cuenta.permite_movimiento,
+            descripcion: cuenta.descripcion ?? null,
+            padre_id,
+          }
         })
       )
 
@@ -190,12 +200,15 @@ export async function seedPlanCuentas(
 
     // Crear período contable para el mes/año actual
     const ahora = new Date()
-    await supabase.from('periodos_contables').insert({
+    await supabase.from('periodos_contables').upsert({
       empresa_id: empresaId,
       anio: ahora.getFullYear(),
       mes: ahora.getMonth() + 1,
       estado: 'abierto',
-    }).onConflict('empresa_id, anio, mes').ignore()
+      nombre: `Período ${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`,
+      fecha_inicio: new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString().slice(0, 10),
+      fecha_fin: new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0).toISOString().slice(0, 10),
+    }, { onConflict: 'empresa_id,anio,mes', ignoreDuplicates: true })
 
     return { error: null }
   } catch (e) {

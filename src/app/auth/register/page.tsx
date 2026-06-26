@@ -69,8 +69,8 @@ export default function RegisterPage() {
       toast.error("La contraseña debe tener al menos 6 caracteres.");
       return;
     }
-    if (tipoEmpresa === "persona_juridica" && rucJuridica.replace(/\D/g, "").length !== 14) {
-      toast.error("El RUC de Persona Jurídica debe tener exactamente 14 dígitos.");
+    if (tipoEmpresa === "persona_juridica" && rucJuridica.trim().length !== 14) {
+      toast.error("El RUC de Persona Jurídica debe tener exactamente 14 caracteres.");
       return;
     }
 
@@ -230,7 +230,7 @@ export default function RegisterPage() {
               </div>
               <div>
                 <label className="label">Sitio web (opcional)</label>
-                <input type="url" className="input" placeholder="https://miweb.com"
+                <input type="text" className="input" placeholder="www.miweb.com"
                   value={sitioWeb} onChange={e => setSitioWeb(e.target.value)} />
               </div>
             </div>
@@ -243,7 +243,7 @@ export default function RegisterPage() {
             <>
               {/* Info RUC */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-800 text-sm">
-                ℹ️ Para Persona Jurídica el RUC debe contener exactamente 14 dígitos.
+                ℹ️ Para Persona Jurídica el RUC debe contener exactamente 14 caracteres (letras y números).
               </div>
 
               {/* — Datos de la empresa — */}
@@ -266,11 +266,11 @@ export default function RegisterPage() {
                   <div>
                     <label className="label">Número RUC (14 dígitos) <span className="text-red-500">*</span></label>
                     <input type="text" className="input" placeholder="J0000000000000"
-                      value={rucJuridica} onChange={e => setRucJuridica(e.target.value)} required maxLength={16} />
+                      value={rucJuridica} onChange={e => setRucJuridica(e.target.value)} required maxLength={14} />
                   </div>
                   <div>
                     <label className="label">Sitio web (opcional)</label>
-                    <input type="url" className="input" placeholder="https://www.miempresa.com"
+                    <input type="text" className="input" placeholder="www.miempresa.com"
                       value={sitioWebJur} onChange={e => setSitioWebJur(e.target.value)} />
                   </div>
 
