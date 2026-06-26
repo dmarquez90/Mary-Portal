@@ -8,6 +8,7 @@ import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { IVA_NICARAGUA } from "@/types";
 import type { Proveedor, Producto } from "@/types";
+import { getPrimeraCuentaCaja, getPrimeraCuentaBanco, crearMovimientoCaja, crearTransaccionBanco } from "@/lib/pagos/queries";
 
 interface Linea {
   producto_id: string;
@@ -270,6 +271,49 @@ export default function NuevaCompraPage() {
       }
     }
 
+    // ── Flujo Caja / Banco al recibir compra (solo si es pago inmediato) ──
+    if (estado === "recibida" && tipoPago !== "credito") {
+      const descripcion = `Pago Compra ${numeroCompra}`;
+      const fecha = fechaCompra;
+
+      if (tipoPago === "contado") {
+        // Efectivo → Caja (egreso)
+        const cuentaCaja = await getPrimeraCuentaCaja(empresaId);
+        if (cuentaCaja) {
+          try {
+            await crearMovimientoCaja(empresaId, {
+              cuenta_caja_id: cuentaCaja.id,
+              tipo: "egreso",
+              monto: total,
+              descripcion,
+              fecha,
+              ref_compra_id: compra.id,
+            });
+          } catch (e) {
+            console.error("Error al registrar en Caja:", e);
+          }
+        }
+      } else {
+        // Tarjeta / Transferencia / Cheque → Banco (egreso)
+        const cuentaBanco = await getPrimeraCuentaBanco(empresaId);
+        if (cuentaBanco) {
+          try {
+            await crearTransaccionBanco(empresaId, {
+              cuenta_banco_id: cuentaBanco.id,
+              tipo: tipoPago === "tarjeta" ? "tarjeta" : tipoPago,
+              monto: total,
+              descripcion,
+              fecha,
+              ref_compra_id: compra.id,
+              es_egreso: true,
+            });
+          } catch (e) {
+            console.error("Error al registrar en Banco:", e);
+          }
+        }
+      }
+    }
+
     toast.success(`Compra ${numeroCompra} ${estado === "recibida" ? "recibida — inventario actualizado" : "guardada como borrador"}`);
     router.push("/dashboard/compras");
   }
@@ -301,10 +345,11 @@ export default function NuevaCompraPage() {
               <div>
                 <label className="label">Tipo de pago</label>
                 <select className="input" value={tipoPago} onChange={e => setTipoPago(e.target.value)}>
-                  <option value="contado">Contado</option>
-                  <option value="credito">Crédito</option>
+                  <option value="contado">Contado (Efectivo)</option>
+                  <option value="tarjeta">Tarjeta</option>
                   <option value="transferencia">Transferencia</option>
                   <option value="cheque">Cheque</option>
+                  <option value="credito">Crédito</option>
                 </select>
               </div>
               <div>

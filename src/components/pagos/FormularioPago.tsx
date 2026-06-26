@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // SARA App â€“ Componente: FormularioPago
 // src/components/pagos/FormularioPago.tsx
 // Soporta pagos simples, mixtos y parciales

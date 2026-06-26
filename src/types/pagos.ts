@@ -7,6 +7,7 @@ export type TipoPago =
   | 'efectivo'
   | 'transferencia'
   | 'cheque'
+  | 'tarjeta'
   | 'tarjeta_debito'
   | 'tarjeta_credito'
 
@@ -211,6 +212,7 @@ export const TIPO_PAGO_LABELS: Record<TipoPago, string> = {
   efectivo:       'Efectivo',
   transferencia:  'Transferencia',
   cheque:         'Cheque',
+  tarjeta:        'Tarjeta',
   tarjeta_debito: 'Tarjeta Débito',
   tarjeta_credito:'Tarjeta Crédito',
 }
@@ -219,6 +221,7 @@ export const TIPO_PAGO_COLORS: Record<TipoPago, string> = {
   efectivo:       'bg-green-100 text-green-700',
   transferencia:  'bg-blue-100 text-blue-700',
   cheque:         'bg-purple-100 text-purple-700',
+  tarjeta:        'bg-orange-100 text-orange-700',
   tarjeta_debito: 'bg-orange-100 text-orange-700',
   tarjeta_credito:'bg-red-100 text-red-700',
 }

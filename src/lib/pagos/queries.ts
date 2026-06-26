@@ -8,7 +8,6 @@ import type {
   MovimientoCaja, TransaccionBanco,
   Cheque, Pago, NuevoPago,
   ResumenCaja, ResumenBancos,
-  round2,
 } from '@/types/pagos'
 import { round2 as r2 } from '@/types/pagos'
 
@@ -303,4 +302,147 @@ export async function getResumenBancos(empresaId: string): Promise<ResumenBancos
     cheques_activos:     chequesActivos.count ?? 0,
     cheques_por_vencer:  chequesPorVencer.count ?? 0,
   }
+}
+
+// ════════════════════════════════════════════════════════════
+// FLUJO DE PAGOS: CAJA Y BANCO
+// ════════════════════════════════════════════════════════════
+
+/** Obtiene la primera cuenta de caja activa de la empresa */
+export async function getPrimeraCuentaCaja(empresaId: string): Promise<CuentaCaja | null> {
+  const supabase = await getSupabase()
+  const { data } = await supabase
+    .from('cuentas_caja')
+    .select('*')
+    .eq('empresa_id', empresaId)
+    .eq('activa', true)
+    .eq('tipo', 'caja_general')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  return data ?? null
+}
+
+/** Obtiene la primera cuenta de banco activa de la empresa */
+export async function getPrimeraCuentaBanco(empresaId: string): Promise<CuentaBanco | null> {
+  const supabase = await getSupabase()
+  const { data } = await supabase
+    .from('cuentas_banco')
+    .select('*')
+    .eq('empresa_id', empresaId)
+    .eq('activa', true)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  return data ?? null
+}
+
+/**
+ * Registra un movimiento en una cuenta de Caja y actualiza su saldo.
+ * - ingreso: cobra una venta en efectivo
+ * - egreso: paga una compra en efectivo
+ */
+export async function crearMovimientoCaja(
+  empresaId: string,
+  data: {
+    cuenta_caja_id: string
+    tipo: 'ingreso' | 'egreso'
+    monto: number
+    descripcion: string
+    fecha: string
+    ref_factura_id?: string
+    ref_compra_id?: string
+  }
+): Promise<void> {
+  const supabase = await getSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  const monto = r2(data.monto)
+
+  // 1. Insertar movimiento
+  const { error: movErr } = await supabase.from('movimientos_caja').insert({
+    empresa_id:     empresaId,
+    cuenta_caja_id: data.cuenta_caja_id,
+    tipo:           data.tipo,
+    monto,
+    descripcion:    data.descripcion,
+    fecha:          data.fecha,
+    ref_factura_id: data.ref_factura_id ?? null,
+    ref_compra_id:  data.ref_compra_id ?? null,
+    estado:         'registrado',
+    created_by:     user?.id ?? null,
+  })
+  if (movErr) throw movErr
+
+  // 2. Actualizar saldo de la cuenta
+  const { data: cuenta, error: cuentaErr } = await supabase
+    .from('cuentas_caja')
+    .select('saldo_actual')
+    .eq('id', data.cuenta_caja_id)
+    .single()
+  if (cuentaErr) throw cuentaErr
+
+  const saldoActual = Number(cuenta.saldo_actual)
+  const nuevoSaldo  = r2(data.tipo === 'ingreso' ? saldoActual + monto : saldoActual - monto)
+
+  const { error: updErr } = await supabase
+    .from('cuentas_caja')
+    .update({ saldo_actual: nuevoSaldo, updated_at: new Date().toISOString() })
+    .eq('id', data.cuenta_caja_id)
+  if (updErr) throw updErr
+}
+
+/**
+ * Registra una transacción bancaria y actualiza el saldo de la cuenta.
+ * Se usa para transferencias, cheques y tarjetas.
+ */
+export async function crearTransaccionBanco(
+  empresaId: string,
+  data: {
+    cuenta_banco_id: string
+    tipo: string           // transferencia | cheque | tarjeta | tarjeta_debito | tarjeta_credito
+    monto: number
+    descripcion: string
+    fecha: string
+    referencia?: string
+    ref_factura_id?: string
+    ref_compra_id?: string
+    es_egreso?: boolean    // true = pago de compra, false/undefined = cobro de venta
+  }
+): Promise<void> {
+  const supabase = await getSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  const monto = r2(data.monto)
+
+  // 1. Insertar transacción
+  const { error: txErr } = await supabase.from('transacciones_banco').insert({
+    empresa_id:      empresaId,
+    cuenta_banco_id: data.cuenta_banco_id,
+    tipo:            data.tipo,
+    monto,
+    descripcion:     data.descripcion,
+    fecha:           data.fecha,
+    referencia:      data.referencia ?? null,
+    ref_factura_id:  data.ref_factura_id ?? null,
+    ref_compra_id:   data.ref_compra_id ?? null,
+    estado:          'registrado',
+    created_by:      user?.id ?? null,
+  })
+  if (txErr) throw txErr
+
+  // 2. Actualizar saldo de la cuenta bancaria
+  const { data: cuenta, error: cuentaErr } = await supabase
+    .from('cuentas_banco')
+    .select('saldo_actual')
+    .eq('id', data.cuenta_banco_id)
+    .single()
+  if (cuentaErr) throw cuentaErr
+
+  const saldoActual = Number(cuenta.saldo_actual)
+  const nuevoSaldo  = r2(data.es_egreso ? saldoActual - monto : saldoActual + monto)
+
+  const { error: updErr } = await supabase
+    .from('cuentas_banco')
+    .update({ saldo_actual: nuevoSaldo, updated_at: new Date().toISOString() })
+    .eq('id', data.cuenta_banco_id)
+  if (updErr) throw updErr
 }

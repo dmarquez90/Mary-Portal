@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { Plus, Building2, AlertTriangle, CheckCircle } from 'lucide-react'

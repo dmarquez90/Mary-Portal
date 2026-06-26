@@ -112,7 +112,7 @@ export interface Producto {
 // ─── Facturas de Venta ────────────────────────────────────────────────────────
 
 export type EstadoFactura = "borrador" | "emitida" | "pagada" | "anulada";
-export type TipoPago = "contado" | "credito" | "transferencia" | "cheque";
+export type TipoPago = "contado" | "credito" | "transferencia" | "cheque" | "tarjeta";
 
 export interface DetalleFactura {
   id: string;

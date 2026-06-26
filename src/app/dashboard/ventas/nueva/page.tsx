@@ -8,6 +8,7 @@ import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { IVA_NICARAGUA } from "@/types";
 import type { Cliente, Producto } from "@/types";
+import { getPrimeraCuentaCaja, getPrimeraCuentaBanco, crearMovimientoCaja, crearTransaccionBanco } from "@/lib/pagos/queries";
 
 interface Linea {
   producto_id: string;
@@ -188,6 +189,49 @@ export default function NuevaFacturaPage() {
       }
     }
 
+    // ── Flujo Caja / Banco al emitir (solo si es pago inmediato) ──
+    if (estado === "emitida" && tipoPago !== "credito") {
+      const descripcion = `Cobro Factura ${numeroFactura}`;
+      const fecha = fechaEmision;
+
+      if (tipoPago === "contado") {
+        // Efectivo → Caja
+        const cuentaCaja = await getPrimeraCuentaCaja(empresaId);
+        if (cuentaCaja) {
+          try {
+            await crearMovimientoCaja(empresaId, {
+              cuenta_caja_id: cuentaCaja.id,
+              tipo: "ingreso",
+              monto: total,
+              descripcion,
+              fecha,
+              ref_factura_id: factura.id,
+            });
+          } catch (e) {
+            console.error("Error al registrar en Caja:", e);
+          }
+        }
+      } else {
+        // Tarjeta / Transferencia / Cheque → Banco
+        const cuentaBanco = await getPrimeraCuentaBanco(empresaId);
+        if (cuentaBanco) {
+          try {
+            await crearTransaccionBanco(empresaId, {
+              cuenta_banco_id: cuentaBanco.id,
+              tipo: tipoPago === "tarjeta" ? "tarjeta" : tipoPago,
+              monto: total,
+              descripcion,
+              fecha,
+              ref_factura_id: factura.id,
+              es_egreso: false,
+            });
+          } catch (e) {
+            console.error("Error al registrar en Banco:", e);
+          }
+        }
+      }
+    }
+
     toast.success(`Factura ${numeroFactura} ${estado === "emitida" ? "emitida — inventario actualizado" : "guardada como borrador"}`);
     router.push("/dashboard/ventas");
   }
@@ -257,10 +301,11 @@ export default function NuevaFacturaPage() {
               <div>
                 <label className="label">Tipo de pago</label>
                 <select className="input" value={tipoPago} onChange={e => handleTipoPago(e.target.value)}>
-                  <option value="contado">Contado</option>
-                  <option value="credito">Crédito</option>
+                  <option value="contado">Contado (Efectivo)</option>
+                  <option value="tarjeta">Tarjeta</option>
                   <option value="transferencia">Transferencia</option>
                   <option value="cheque">Cheque</option>
+                  <option value="credito">Crédito</option>
                 </select>
               </div>
 
