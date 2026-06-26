@@ -29,11 +29,6 @@ const contabilidadItems = [
   { href: '/dashboard/caja-bancos', label: 'Caja y Bancos', icon: BanknoteIcon },
 ]
 
-const bottomItems = [
-  { href: '/dashboard/mi-empresa', label: 'Mi Empresa', icon: Home },
-  { href: '/dashboard/configuracion', label: 'Configuración', icon: Settings },
-]
-
 function NavItem({
   href,
   label,
@@ -67,9 +62,9 @@ export default function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="w-56 bg-gray-900 text-white flex flex-col h-screen fixed left-0 top-0">
+    <aside className="w-56 bg-slate-800 text-white flex flex-col h-screen fixed left-0 top-0">
       {/* Logo */}
-      <div className="p-6 border-b border-gray-800">
+      <div className="p-6 border-b border-slate-700">
         <h1 className="text-xl font-bold">SARA</h1>
         <p className="text-xs text-gray-400 mt-1">Sistema Administrativo</p>
       </div>
@@ -87,7 +82,7 @@ export default function Sidebar() {
         ))}
 
         {/* Contabilidad Section */}
-        <div className="pt-4 mt-4 border-t border-gray-800">
+        <div className="pt-4 mt-4 border-t border-slate-700">
           <p className="text-xs font-semibold text-gray-500 uppercase px-4 mb-2">
             Contabilidad
           </p>
@@ -105,19 +100,8 @@ export default function Sidebar() {
       </nav>
 
       {/* Bottom Section */}
-      <div className="border-t border-gray-800 p-4 space-y-2">
-        {bottomItems.map((item) => (
-          <NavItem
-            key={item.href}
-            href={item.href}
-            label={item.label}
-            icon={item.icon}
-            active={pathname === item.href}
-          />
-        ))}
-
-        {/* Logout */}
-        <button className="flex items-center gap-3 px-4 py-3 rounded-lg w-full text-gray-300 hover:bg-gray-800 transition-colors">
+      <div className="border-t border-slate-700 p-4 space-y-2">
+        <button className="flex items-center gap-3 px-4 py-3 rounded-lg w-full text-gray-300 hover:bg-slate-700 transition-colors">
           <LogOut size={20} />
           <span className="text-sm font-medium">Cerrar sesión</span>
         </button>
