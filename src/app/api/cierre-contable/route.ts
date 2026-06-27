@@ -20,7 +20,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data)
 }
 
-// POST: ejecutar cierre de período
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -31,13 +30,29 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase.rpc('cerrar_periodo_contable', {
     p_periodo_id: periodo_id,
-    p_user_id: user.id
+    p_user_id:    user.id,
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if ((data as string).startsWith('ERROR')) {
-    return NextResponse.json({ error: data }, { status: 400 })
+
+  // La función ahora retorna JSONB con campo 'ok'
+  const resultado = data as {
+    ok: boolean
+    error?: string
+    mensaje?: string
+    periodo_cerrado?: string
+    total_ingresos?: number
+    total_costos?: number
+    total_gastos?: number
+    utilidad_neta?: number
+    asiento_cierre_id?: string
+    periodo_siguiente?: string
+    pendientes?: number
   }
 
-  return NextResponse.json({ mensaje: data })
+  if (!resultado.ok) {
+    return NextResponse.json({ error: resultado.error, pendientes: resultado.pendientes }, { status: 400 })
+  }
+
+  return NextResponse.json(resultado)
 }
