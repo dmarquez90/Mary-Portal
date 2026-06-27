@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, ArrowLeft, Search, X, PackagePlus } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, Search, X, PackagePlus, FileText } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { IVA_NICARAGUA } from "@/types";
@@ -18,7 +18,6 @@ interface Linea {
   aplica_iva: boolean;
 }
 
-// Formulario para crear producto rápido
 const PROD_FORM_VACIO = {
   codigo: "", nombre: "", unidad_medida: "unidad",
   precio_venta: 0, aplica_iva: true, stock_minimo: 0,
@@ -32,21 +31,21 @@ export default function NuevaCompraPage() {
   const [productos,   setProductos]  = useState<Producto[]>([]);
   const [empresaId,   setEmpresaId]  = useState("");
 
-  const [proveedorId, setProveedorId] = useState("");
-  const [fechaCompra, setFechaCompra] = useState(new Date().toISOString().split("T")[0]);
-  const [tipoPago,    setTipoPago]    = useState("contado");
-  const [notas,       setNotas]       = useState("");
-  const [lineas,      setLineas]      = useState<Linea[]>([lineaVacia()]);
+  const [proveedorId,       setProveedorId]       = useState("");
+  const [fechaCompra,       setFechaCompra]       = useState(new Date().toISOString().split("T")[0]);
+  const [tipoPago,          setTipoPago]          = useState("contado");
+  const [notas,             setNotas]             = useState("");
+  const [lineas,            setLineas]            = useState<Linea[]>([lineaVacia()]);
+  // ── NUEVO: número de factura del proveedor (manual) ──────────
+  const [numFacturaProveedor, setNumFacturaProveedor] = useState("");
 
-  // Búsqueda por línea
   const [busquedas,       setBusquedas]       = useState<string[]>([""]);
   const [mostrarDropdown, setMostrarDropdown] = useState<number | null>(null);
 
-  // Modal de nuevo producto rápido
-  const [showNuevoProd,   setShowNuevoProd]   = useState(false);
-  const [lineaParaNuevo,  setLineaParaNuevo]  = useState<number | null>(null);
-  const [prodForm,        setProdForm]        = useState({ ...PROD_FORM_VACIO });
-  const [creandoProd,     setCreandoProd]     = useState(false);
+  const [showNuevoProd,  setShowNuevoProd]  = useState(false);
+  const [lineaParaNuevo, setLineaParaNuevo] = useState<number | null>(null);
+  const [prodForm,       setProdForm]       = useState({ ...PROD_FORM_VACIO });
+  const [creandoProd,    setCreandoProd]    = useState(false);
 
   function lineaVacia(): Linea {
     return { producto_id: "", descripcion: "", cantidad: 1, precio_unitario: 0, aplica_iva: true };
@@ -78,7 +77,6 @@ export default function NuevaCompraPage() {
     load();
   }, []);
 
-  // ── Filtrar productos por búsqueda ───────────────────────────
   function productosFiltrados(idx: number) {
     const b = busquedas[idx]?.toLowerCase() ?? "";
     if (!b) return productos;
@@ -88,13 +86,11 @@ export default function NuevaCompraPage() {
     );
   }
 
-  // Hay texto escrito pero no coincide con ningún producto
   function sinResultados(idx: number) {
     const b = busquedas[idx]?.toLowerCase() ?? "";
     return b.length >= 2 && productosFiltrados(idx).length === 0;
   }
 
-  // ── Seleccionar producto existente ────────────────────────────
   function seleccionarProducto(idx: number, prod: Producto) {
     setLineas(prev => prev.map((l, i) => i === idx
       ? { ...l, producto_id: prod.id, descripcion: prod.nombre, precio_unitario: prod.precio_compra, aplica_iva: prod.aplica_iva }
@@ -105,10 +101,8 @@ export default function NuevaCompraPage() {
     setMostrarDropdown(null);
   }
 
-  // ── Abrir modal de nuevo producto desde una línea ─────────────
   function abrirNuevoProducto(idx: number) {
     const nombre = busquedas[idx] ?? "";
-    // Generar código automático basado en el nombre
     const codigo = nombre.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) || "PROD";
     const codigoFinal = `${codigo}-${String(productos.length + 1).padStart(3, "0")}`;
     setProdForm({ ...PROD_FORM_VACIO, nombre, codigo: codigoFinal });
@@ -117,7 +111,6 @@ export default function NuevaCompraPage() {
     setMostrarDropdown(null);
   }
 
-  // ── Crear producto nuevo y asignarlo a la línea ───────────────
   async function handleCrearProducto() {
     if (!prodForm.nombre.trim()) { toast.error("El nombre del producto es obligatorio."); return; }
     if (!prodForm.codigo.trim()) { toast.error("El código es obligatorio."); return; }
@@ -126,8 +119,6 @@ export default function NuevaCompraPage() {
     setCreandoProd(true);
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
-
-    // El precio de compra viene de la línea actual
     const precioCompra = lineaParaNuevo !== null ? lineas[lineaParaNuevo].precio_unitario : 0;
 
     const { data: nuevo, error } = await supabase.from("productos").insert({
@@ -149,11 +140,9 @@ export default function NuevaCompraPage() {
       return;
     }
 
-    // Agregar a la lista local de productos
     const prodNuevo = nuevo as Producto;
     setProductos(prev => [...prev, prodNuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
 
-    // Asignarlo automáticamente a la línea
     if (lineaParaNuevo !== null) {
       setLineas(prev => prev.map((l, i) => i === lineaParaNuevo
         ? { ...l, producto_id: prodNuevo.id, descripcion: prodNuevo.nombre, aplica_iva: prodNuevo.aplica_iva }
@@ -196,7 +185,6 @@ export default function NuevaCompraPage() {
 
   async function handleSave(estado: "borrador" | "recibida") {
     if (!empresaId) { toast.error("Configura tu empresa primero."); return; }
-
     const lineasConDatos = lineas.filter(l => l.descripcion || l.producto_id);
     if (!lineasConDatos.length) { toast.error("Agrega al menos un artículo."); return; }
 
@@ -204,7 +192,6 @@ export default function NuevaCompraPage() {
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
 
-    // Consecutivo
     const { data: cons } = await supabase.from("consecutivos").select("*").eq("empresa_id", empresaId).eq("tipo", "compra").single();
     let numeroCompra = "C-000001";
     if (cons) {
@@ -226,7 +213,7 @@ export default function NuevaCompraPage() {
       subtotal,
       iva_total:     ivaTotal,
       total,
-      notas:         notas || null,
+      notas:         [notas, numFacturaProveedor ? `Factura proveedor: ${numFacturaProveedor}` : ""].filter(Boolean).join(" | ") || null,
     }).select().single();
 
     if (error || !compra) { toast.error(`Error al guardar: ${error?.message}`); setSaving(false); return; }
@@ -238,78 +225,38 @@ export default function NuevaCompraPage() {
       })
     );
 
-    // FIFO: actualizar stock si es recibida
     if (estado === "recibida") {
       for (const l of lineas) {
         if (!l.producto_id || l.cantidad <= 0) continue;
-
         const { data: prod } = await supabase.from("productos").select("stock_actual").eq("id", l.producto_id).single();
         const stockNuevo = Number(prod?.stock_actual ?? 0) + Number(l.cantidad);
-        await supabase.from("productos").update({
-          stock_actual:  stockNuevo,
-          precio_compra: l.precio_unitario,
-        }).eq("id", l.producto_id);
-
+        await supabase.from("productos").update({ stock_actual: stockNuevo, precio_compra: l.precio_unitario }).eq("id", l.producto_id);
         await supabase.from("lotes_inventario").insert({
-          empresa_id:        empresaId,
-          producto_id:       l.producto_id,
-          compra_id:         compra.id,
-          fecha_entrada:     fechaCompra,
-          cantidad_inicial:  l.cantidad,
-          cantidad_restante: l.cantidad,
-          costo_unitario:    l.precio_unitario,
+          empresa_id: empresaId, producto_id: l.producto_id, compra_id: compra.id,
+          fecha_entrada: fechaCompra, cantidad_inicial: l.cantidad,
+          cantidad_restante: l.cantidad, costo_unitario: l.precio_unitario,
         });
-
         await supabase.from("movimientos_inventario").insert({
-          empresa_id:  empresaId,
-          producto_id: l.producto_id,
-          tipo:        "entrada",
-          cantidad:    l.cantidad,
-          referencia:  compra.id,
-          notas:       `Compra ${numeroCompra}`,
+          empresa_id: empresaId, producto_id: l.producto_id, tipo: "entrada",
+          cantidad: l.cantidad, referencia: compra.id, notas: `Compra ${numeroCompra}`,
         });
       }
     }
 
-    // ── Flujo Caja / Banco al recibir compra (solo si es pago inmediato) ──
     if (estado === "recibida" && tipoPago !== "credito") {
-      const descripcion = `Pago Compra ${numeroCompra}`;
+      const descripcion = `Pago Compra ${numeroCompra}${numFacturaProveedor ? ` (Fact. Prov. ${numFacturaProveedor})` : ""}`;
       const fecha = fechaCompra;
-
       if (tipoPago === "contado") {
-        // Efectivo → Caja (egreso)
         const cuentaCaja = await getPrimeraCuentaCaja(empresaId);
         if (cuentaCaja) {
-          try {
-            await crearMovimientoCaja(empresaId, {
-              cuenta_caja_id: cuentaCaja.id,
-              tipo: "egreso",
-              monto: total,
-              descripcion,
-              fecha,
-              ref_compra_id: compra.id,
-            });
-          } catch (e) {
-            console.error("Error al registrar en Caja:", e);
-          }
+          try { await crearMovimientoCaja(empresaId, { cuenta_caja_id: cuentaCaja.id, tipo: "egreso", monto: total, descripcion, fecha, ref_compra_id: compra.id }); }
+          catch (e) { console.error("Error al registrar en Caja:", e); }
         }
       } else {
-        // Tarjeta / Transferencia / Cheque → Banco (egreso)
         const cuentaBanco = await getPrimeraCuentaBanco(empresaId);
         if (cuentaBanco) {
-          try {
-            await crearTransaccionBanco(empresaId, {
-              cuenta_banco_id: cuentaBanco.id,
-              tipo: tipoPago === "tarjeta" ? "tarjeta" : tipoPago,
-              monto: total,
-              descripcion,
-              fecha,
-              ref_compra_id: compra.id,
-              es_egreso: true,
-            });
-          } catch (e) {
-            console.error("Error al registrar en Banco:", e);
-          }
+          try { await crearTransaccionBanco(empresaId, { cuenta_banco_id: cuentaBanco.id, tipo: tipoPago === "tarjeta" ? "tarjeta" : tipoPago, monto: total, descripcion, fecha, ref_compra_id: compra.id, es_egreso: true }); }
+          catch (e) { console.error("Error al registrar en Banco:", e); }
         }
       }
     }
@@ -356,6 +303,25 @@ export default function NuevaCompraPage() {
                 <label className="label">Fecha de compra</label>
                 <input type="date" className="input" value={fechaCompra} onChange={e => setFechaCompra(e.target.value)} />
               </div>
+
+              {/* ── NUEVO: Número de factura del proveedor ── */}
+              <div>
+                <label className="label flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 text-slate-400" />
+                  N° Factura del proveedor
+                  <span className="text-slate-400 font-normal text-xs">(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  className="input font-mono"
+                  placeholder="Ej: 0001-0001-00123456"
+                  value={numFacturaProveedor}
+                  onChange={e => setNumFacturaProveedor(e.target.value.toUpperCase())}
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  Número impreso en la factura física que te entregó el proveedor
+                </p>
+              </div>
             </div>
           </div>
 
@@ -363,14 +329,12 @@ export default function NuevaCompraPage() {
           <div className="card">
             <h2 className="font-semibold text-slate-900 mb-1">Artículos comprados</h2>
             <p className="text-slate-400 text-xs mb-4">
-              Busca en tu inventario. Si el producto no existe, haz clic en <strong>"+ Crear producto"</strong> para agregarlo al momento.
+              Busca en tu inventario. Si el producto no existe, haz clic en <strong>&quot;+ Crear producto&quot;</strong> para agregarlo al momento.
             </p>
             <div className="space-y-3">
               {lineas.map((l, idx) => (
                 <div key={idx} className="border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-3">
                   <div className="grid grid-cols-12 gap-2">
-
-                    {/* Búsqueda de producto con opción de crear */}
                     <div className="col-span-12 md:col-span-5 relative">
                       <label className="label text-xs">Producto del inventario</label>
                       <div className="relative">
@@ -390,8 +354,6 @@ export default function NuevaCompraPage() {
                           onBlur={() => setTimeout(() => setMostrarDropdown(null), 200)}
                         />
                       </div>
-
-                      {/* Dropdown con resultados O botón crear */}
                       {mostrarDropdown === idx && (
                         <div className="absolute z-20 w-full bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-52 overflow-y-auto">
                           {productosFiltrados(idx).length > 0 ? (
@@ -406,19 +368,17 @@ export default function NuevaCompraPage() {
                                   <span className="float-right text-slate-500 text-xs">Stock: {p.stock_actual}</span>
                                 </button>
                               ))}
-                              {/* Opción de crear aún con resultados */}
                               {(busquedas[idx] ?? "").length >= 2 && (
                                 <button type="button"
                                   className="w-full text-left px-3 py-2 text-brand-700 hover:bg-brand-50 text-sm font-medium border-t border-slate-100 flex items-center gap-2"
                                   onMouseDown={() => abrirNuevoProducto(idx)}
                                 >
                                   <PackagePlus className="w-4 h-4" />
-                                  Crear "{busquedas[idx]}" como nuevo producto
+                                  Crear &quot;{busquedas[idx]}&quot; como nuevo producto
                                 </button>
                               )}
                             </>
                           ) : sinResultados(idx) ? (
-                            // No hay resultados — mostrar opción de crear
                             <button type="button"
                               className="w-full text-left px-4 py-3 hover:bg-brand-50 flex items-start gap-3"
                               onMouseDown={() => abrirNuevoProducto(idx)}
@@ -426,7 +386,7 @@ export default function NuevaCompraPage() {
                               <PackagePlus className="w-5 h-5 text-brand-600 mt-0.5 flex-shrink-0" />
                               <div>
                                 <p className="text-sm font-semibold text-brand-700">
-                                  + Crear "{busquedas[idx]}" como nuevo producto
+                                  + Crear &quot;{busquedas[idx]}&quot; como nuevo producto
                                 </p>
                                 <p className="text-xs text-slate-400 mt-0.5">
                                   No existe en tu inventario. Se creará automáticamente.
@@ -442,7 +402,6 @@ export default function NuevaCompraPage() {
                       )}
                     </div>
 
-                    {/* Descripción */}
                     <div className="col-span-12 md:col-span-3">
                       <label className="label text-xs">Descripción</label>
                       <input type="text" className="input text-sm" value={l.descripcion}
@@ -450,21 +409,18 @@ export default function NuevaCompraPage() {
                         placeholder="Descripción del artículo" />
                     </div>
 
-                    {/* Cantidad */}
                     <div className="col-span-4 md:col-span-1">
                       <label className="label text-xs">Cant.</label>
                       <input type="number" className="input text-sm" min="0" step="0.01" value={l.cantidad}
                         onChange={e => updateLinea(idx, "cantidad", parseFloat(e.target.value) || 0)} />
                     </div>
 
-                    {/* Precio */}
                     <div className="col-span-4 md:col-span-2">
                       <label className="label text-xs">Precio C$</label>
                       <input type="number" className="input text-sm" min="0" step="0.01" value={l.precio_unitario}
                         onChange={e => updateLinea(idx, "precio_unitario", parseFloat(e.target.value) || 0)} />
                     </div>
 
-                    {/* IVA + Eliminar */}
                     <div className="col-span-4 md:col-span-1 flex items-end justify-between pb-1">
                       <label className="flex items-center gap-1 text-xs cursor-pointer">
                         <input type="checkbox" className="w-3.5 h-3.5" checked={l.aplica_iva}
@@ -477,7 +433,6 @@ export default function NuevaCompraPage() {
                     </div>
                   </div>
 
-                  {/* Total línea + indicador de producto */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       {l.producto_id ? (
@@ -517,9 +472,21 @@ export default function NuevaCompraPage() {
                 <span>Total</span><span>{formatCurrency(total)}</span>
               </div>
             </div>
+
+            {/* Referencia factura proveedor en el resumen */}
+            {numFacturaProveedor && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800 text-xs mb-4 flex items-center gap-2">
+                <FileText className="w-4 h-4 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold">Factura proveedor</p>
+                  <p className="font-mono mt-0.5">{numFacturaProveedor}</p>
+                </div>
+              </div>
+            )}
+
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-800 text-xs mb-4">
               <p className="font-semibold mb-1">📦 Método FIFO</p>
-              <p>Al <strong>Recibir</strong> la compra, el stock se actualiza automáticamente. Los productos nuevos creados en esta compra también se actualizan.</p>
+              <p>Al <strong>Recibir</strong> la compra, el stock se actualiza automáticamente.</p>
             </div>
             <div className="space-y-3">
               <button disabled={saving} onClick={() => handleSave("recibida")}
@@ -534,7 +501,7 @@ export default function NuevaCompraPage() {
         </div>
       </div>
 
-      {/* ── Modal: Crear producto nuevo rápido ── */}
+      {/* Modal: Crear producto */}
       {showNuevoProd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="bg-white rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -544,7 +511,7 @@ export default function NuevaCompraPage() {
                   <PackagePlus className="w-5 h-5 text-brand-700" />
                   Nuevo producto en inventario
                 </h3>
-                <p className="text-slate-400 text-xs mt-0.5">Completa los datos — el stock se actualizará al recibir esta compra</p>
+                <p className="text-slate-400 text-xs mt-0.5">El stock se actualizará al recibir esta compra</p>
               </div>
               <button onClick={() => setShowNuevoProd(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />
@@ -553,92 +520,49 @@ export default function NuevaCompraPage() {
 
             <div className="p-5 space-y-4">
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800 text-xs">
-                💡 El precio de compra viene de la línea. El stock inicial será <strong>0</strong> y se sumará automáticamente al recibir la compra.
+                💡 El precio de compra viene de la línea. El stock inicial será <strong>0</strong> y se sumará al recibir.
               </div>
-
-              {/* Código — editable y con sugerencia */}
               <div>
-                <label className="label">
-                  Código del producto <span className="text-red-500">*</span>
-                  <span className="text-slate-400 font-normal ml-1">(puedes modificarlo)</span>
-                </label>
+                <label className="label">Código <span className="text-red-500">*</span> <span className="text-slate-400 font-normal ml-1">(puedes modificarlo)</span></label>
                 <div className="flex gap-2">
-                  <input
-                    className="input flex-1 font-mono uppercase"
-                    value={prodForm.codigo}
+                  <input className="input flex-1 font-mono uppercase" value={prodForm.codigo}
                     onChange={e => setProdForm(f => ({ ...f, codigo: e.target.value.toUpperCase().replace(/\s/g, "") }))}
-                    placeholder="Ej: ARR-001, ACEIT-002"
-                    maxLength={20}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const base = prodForm.nombre.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
-                      const num  = String(productos.length + 1).padStart(3, "0");
-                      setProdForm(f => ({ ...f, codigo: `${base}-${num}` }));
-                    }}
-                    className="btn-secondary text-xs px-3 whitespace-nowrap"
-                  >
-                    Generar
-                  </button>
+                    placeholder="Ej: ARR-001" maxLength={20} />
+                  <button type="button"
+                    onClick={() => { const base = prodForm.nombre.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5); const num = String(productos.length + 1).padStart(3, "0"); setProdForm(f => ({ ...f, codigo: `${base}-${num}` })); }}
+                    className="btn-secondary text-xs px-3 whitespace-nowrap">Generar</button>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  Escribe tu propio código o presiona <strong>Generar</strong> para crearlo automáticamente desde el nombre.
-                </p>
               </div>
-
-              {/* Nombre */}
               <div>
-                <label className="label">Nombre del producto <span className="text-red-500">*</span></label>
-                <input
-                  className="input"
-                  value={prodForm.nombre}
-                  onChange={e => setProdForm(f => ({ ...f, nombre: e.target.value }))}
-                  placeholder="Nombre completo del producto"
-                />
+                <label className="label">Nombre <span className="text-red-500">*</span></label>
+                <input className="input" value={prodForm.nombre}
+                  onChange={e => setProdForm(f => ({ ...f, nombre: e.target.value }))} />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
-                {/* Unidad */}
                 <div>
-                  <label className="label">Unidad de medida</label>
+                  <label className="label">Unidad</label>
                   <select className="input" value={prodForm.unidad_medida}
                     onChange={e => setProdForm(f => ({ ...f, unidad_medida: e.target.value }))}>
-                    {["unidad","caja","kg","gr","litro","ml","metro","par","docena","servicio"].map(u =>
-                      <option key={u}>{u}</option>
-                    )}
+                    {["unidad","caja","kg","gr","litro","ml","metro","par","docena","servicio"].map(u => <option key={u}>{u}</option>)}
                   </select>
                 </div>
-
-                {/* IVA */}
                 <div>
-                  <label className="label">¿Aplica IVA 15%?</label>
-                  <select className="input"
-                    value={prodForm.aplica_iva ? "si" : "no"}
+                  <label className="label">¿Aplica IVA?</label>
+                  <select className="input" value={prodForm.aplica_iva ? "si" : "no"}
                     onChange={e => setProdForm(f => ({ ...f, aplica_iva: e.target.value === "si" }))}>
-                    <option value="si">Sí — grava IVA 15%</option>
-                    <option value="no">No — exento de IVA</option>
+                    <option value="si">Sí — 15%</option>
+                    <option value="no">No — exento</option>
                   </select>
                 </div>
-
-                {/* Precio venta */}
                 <div>
                   <label className="label">Precio de venta (C$)</label>
-                  <input type="number" className="input" min="0" step="0.01"
-                    value={prodForm.precio_venta}
-                    onChange={e => setProdForm(f => ({ ...f, precio_venta: parseFloat(e.target.value) || 0 }))}
-                    placeholder="0.00" />
-                  <p className="text-xs text-slate-400 mt-1">El precio de compra viene de la línea</p>
+                  <input type="number" className="input" min="0" step="0.01" value={prodForm.precio_venta}
+                    onChange={e => setProdForm(f => ({ ...f, precio_venta: parseFloat(e.target.value) || 0 }))} />
                 </div>
-
-                {/* Stock mínimo */}
                 <div>
                   <label className="label">Stock mínimo</label>
-                  <input type="number" className="input" min="0" step="1"
-                    value={prodForm.stock_minimo ?? 0}
-                    onChange={e => setProdForm(f => ({ ...f, stock_minimo: parseFloat(e.target.value) || 0 }))}
-                    placeholder="0" />
-                  <p className="text-xs text-slate-400 mt-1">Alerta cuando el stock baje de aquí</p>
+                  <input type="number" className="input" min="0" value={prodForm.stock_minimo ?? 0}
+                    onChange={e => setProdForm(f => ({ ...f, stock_minimo: parseFloat(e.target.value) || 0 }))} />
                 </div>
               </div>
             </div>
@@ -646,10 +570,7 @@ export default function NuevaCompraPage() {
             <div className="flex gap-3 p-5 border-t border-slate-100 sticky bottom-0 bg-white rounded-b-2xl">
               <button onClick={handleCrearProducto} disabled={creandoProd}
                 className="btn-primary flex-1 flex items-center justify-center gap-2">
-                {creandoProd
-                  ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  : <><PackagePlus className="w-4 h-4" />Crear y agregar a la compra</>
-                }
+                {creandoProd ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><PackagePlus className="w-4 h-4" />Crear y agregar</>}
               </button>
               <button onClick={() => setShowNuevoProd(false)} className="btn-secondary px-5">Cancelar</button>
             </div>
