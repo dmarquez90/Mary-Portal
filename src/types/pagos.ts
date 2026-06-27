@@ -256,4 +256,8 @@ export function formatUSD(value: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(round2(value))
+}SD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(round2(value))
 }
