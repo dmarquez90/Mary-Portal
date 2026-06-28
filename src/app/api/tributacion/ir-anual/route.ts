@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     // ── Ingresos brutos: facturas emitidas o pagadas del año ──
     const { data: ventas } = await supabase
       .from('facturas')
-      .select('subtotal, iva_total, total')
+      .select('subtotal')
       .eq('empresa_id', empresa_id)
       .in('estado', ['emitida', 'pagada'])
       .gte('fecha_emision', fechaInicio)
@@ -103,9 +103,8 @@ export async function POST(req: NextRequest) {
 
     const anticipos_pagados = anticipos?.reduce((s, a) => s + Number(a.monto_a_pagar ?? 0), 0) ?? 0
 
-    // ── Retenciones recibidas de clientes (2% sobre ventas) ───
-    // Estas son las retenciones que los clientes nos aplicaron al pagarnos
-    const retenciones_recibidas = body.retenciones_recibidas ?? 0
+    // ── Retenciones recibidas de clientes ─────────────────────
+    const retenciones_recibidas = Number(body.retenciones_recibidas ?? 0)
 
     // ── Otros gastos deducibles (manual) ─────────────────────
     const otros_gastos = Number(body.otros_gastos_deducibles ?? 0)
@@ -114,19 +113,35 @@ export async function POST(req: NextRequest) {
 
     // ── Cálculo F-106 (LCT Art. 35-43, 52, 55) ───────────────
     const total_costos_gastos =
-      costo_ventas       +  // Costo de Mercancías Vendidas
-      gastos_nomina      +  // Sueldos, INSS patronal, INATEC, prestaciones
-      depreciacion_fiscal+  // Depreciación fiscal LCT Art. 45
-      gastos_ventas      +  // IMI y otros gastos de ventas
-      gastos_admin       +  // Gastos de administración
-      gastos_financ      +  // Gastos financieros
-      otros_gastos          // Otros deducibles
+      costo_ventas        +
+      gastos_nomina       +
+      depreciacion_fiscal +
+      gastos_ventas       +
+      gastos_admin        +
+      gastos_financ       +
+      otros_gastos
 
-    const renta_neta_gravable = Math.max(0, renta_bruta - total_costos_gastos)
-    const ir_30_pct           = round2(renta_neta_gravable * 0.30)
-    const pago_minimo         = round2(renta_bruta * 0.01) // PMD Art. 61 LCT
-    const ir_a_pagar          = Math.max(ir_30_pct, pago_minimo)
-    const ir_neto_pagar       = Math.max(0, round2(ir_a_pagar - anticipos_pagados - retenciones_recibidas))
+    // ── PÉRDIDA FISCAL ────────────────────────────────────────
+    // La renta neta puede ser NEGATIVA (pérdida). No usar Math.max(0,…).
+    // Cuando es negativa: IR 30% = 0, solo aplica PMD si renta_bruta > 0.
+    // LCT Art. 46: pérdidas pueden trasladarse hasta 3 años.
+    const renta_neta_gravable = round2(renta_bruta - total_costos_gastos)
+    const hay_perdida         = renta_neta_gravable < 0
+
+    // IR 30% solo si hay renta neta positiva
+    const ir_30_pct = hay_perdida ? 0 : round2(renta_neta_gravable * 0.30)
+
+    // PMD 1% siempre sobre renta bruta si hay ingresos (Art. 61 LCT)
+    // Excepción: nuevos contribuyentes primeros 3 años, pérdidas continuadas
+    // SARA lo calcula y el usuario decide si aplica
+    const pago_minimo = renta_bruta > 0 ? round2(renta_bruta * 0.01) : 0
+
+    // IR a pagar: el mayor entre IR30% y PMD (solo si hay ingresos)
+    // Con pérdida: ir_a_pagar = pago_minimo (PMD sigue siendo obligatorio sobre ingresos)
+    const ir_a_pagar = renta_bruta > 0 ? Math.max(ir_30_pct, pago_minimo) : 0
+
+    // Neto: después de acreditar anticipos y retenciones (no puede ser negativo para pago)
+    const ir_neto_pagar = Math.max(0, round2(ir_a_pagar - anticipos_pagados - retenciones_recibidas))
 
     payload = {
       empresa_id,
@@ -142,14 +157,19 @@ export async function POST(req: NextRequest) {
       depreciacion_fiscal:        round2(depreciacion_fiscal),
       gastos_nomina:              round2(gastos_nomina),
       otros_gastos_deducibles:    round2(otros_gastos),
-      ir_30_pct:                  ir_30_pct,
+      ir_30_pct,
       pago_minimo_definitivo:     pago_minimo,
       ir_a_pagar:                 round2(ir_a_pagar),
       anticipos_pagados:          round2(anticipos_pagados),
       retenciones_recibidas:      round2(retenciones_recibidas),
-      ir_neto_pagar:              ir_neto_pagar,
-      estado:                     'borrador',
-      created_by:                 user.id,
+      ir_neto_pagar,
+      // Guardar renta neta real (puede ser negativa) para mostrar en frontend
+      // Se almacena en notas temporalmente hasta agregar columna dedicada
+      notas: hay_perdida
+        ? `PÉRDIDA FISCAL: C$ ${Math.abs(renta_neta_gravable).toLocaleString('es-NI', {minimumFractionDigits:2})}. Trasladable hasta 3 años (LCT Art. 46).`
+        : null,
+      estado: 'borrador',
+      created_by: user.id,
     }
   }
 
@@ -180,7 +200,6 @@ export async function PATCH(req: NextRequest) {
   let updateData: Record<string, unknown> = {}
 
   if (accion === 'presentar') {
-    // Genera asiento de liquidación (cruzar anticipos contra IR a pagar)
     asientoId = await asientoIRAnualLiquidacion(supabase, empresa_id, {
       id: decl.id,
       anio_fiscal:            decl.anio_fiscal,
@@ -196,7 +215,6 @@ export async function PATCH(req: NextRequest) {
       numero_declaracion: numero_declaracion || null,
     }
   } else if (accion === 'pagar') {
-    // Genera asiento de pago del saldo neto
     asientoId = await asientoIRAnualPago(supabase, empresa_id, {
       id: decl.id,
       anio_fiscal:    decl.anio_fiscal,

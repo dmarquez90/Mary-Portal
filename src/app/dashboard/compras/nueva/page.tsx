@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, ArrowLeft, Search, X, PackagePlus, FileText } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, Search, X, PackagePlus, FileText, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { IVA_NICARAGUA } from "@/types";
 import type { Proveedor, Producto } from "@/types";
-import { getPrimeraCuentaCaja, getPrimeraCuentaBanco, crearMovimientoCaja, crearTransaccionBanco } from "@/lib/pagos/queries";
 
 interface Linea {
   producto_id: string;
@@ -17,6 +16,9 @@ interface Linea {
   precio_unitario: number;
   aplica_iva: boolean;
 }
+
+interface CuentaBanco { id: string; nombre: string; banco: string; moneda: string; }
+interface CuentaCaja  { id: string; nombre: string; tipo: string; }
 
 const PROD_FORM_VACIO = {
   codigo: "", nombre: "", unidad_medida: "unidad",
@@ -31,13 +33,19 @@ export default function NuevaCompraPage() {
   const [productos,   setProductos]  = useState<Producto[]>([]);
   const [empresaId,   setEmpresaId]  = useState("");
 
-  const [proveedorId,       setProveedorId]       = useState("");
-  const [fechaCompra,       setFechaCompra]       = useState(new Date().toISOString().split("T")[0]);
-  const [tipoPago,          setTipoPago]          = useState("contado");
-  const [notas,             setNotas]             = useState("");
-  const [lineas,            setLineas]            = useState<Linea[]>([lineaVacia()]);
-  // ── NUEVO: número de factura del proveedor (manual) ──────────
-  const [numFacturaProveedor, setNumFacturaProveedor] = useState("");
+  const [proveedorId,          setProveedorId]          = useState("");
+  const [proveedorTipo,        setProveedorTipo]         = useState<string>("juridica");
+  const [fechaCompra,          setFechaCompra]          = useState(new Date().toISOString().split("T")[0]);
+  const [tipoPago,             setTipoPago]             = useState("contado");
+  const [notas,                setNotas]                = useState("");
+  const [lineas,               setLineas]               = useState<Linea[]>([lineaVacia()]);
+  const [numFacturaProveedor,  setNumFacturaProveedor]  = useState("");
+
+  // ── NUEVO: cuentas banco/caja disponibles + selección ────────
+  const [cuentasBanco,    setCuentasBanco]    = useState<CuentaBanco[]>([]);
+  const [cuentasCaja,     setCuentasCaja]     = useState<CuentaCaja[]>([]);
+  const [cuentaBancoId,   setCuentaBancoId]   = useState("");
+  const [cuentaCajaId,    setCuentaCajaId]    = useState("");
 
   const [busquedas,       setBusquedas]       = useState<string[]>([""]);
   const [mostrarDropdown, setMostrarDropdown] = useState<number | null>(null);
@@ -66,16 +74,33 @@ export default function NuevaCompraPage() {
       setEmpresaId(eId);
 
       if (eId) {
-        const [{ data: prov }, { data: prod }] = await Promise.all([
+        const [
+          { data: prov }, { data: prod },
+          { data: bancos }, { data: cajas },
+        ] = await Promise.all([
           supabase.from("proveedores").select("*").eq("empresa_id", eId).eq("activo", true).order("nombre"),
           supabase.from("productos").select("*").eq("empresa_id", eId).eq("activo", true).order("nombre"),
+          supabase.from("cuentas_banco").select("id,nombre,banco,moneda").eq("empresa_id", eId).eq("activa", true).order("created_at"),
+          supabase.from("cuentas_caja").select("id,nombre,tipo").eq("empresa_id", eId).eq("activa", true).order("tipo"),
         ]);
         setProveedores((prov as Proveedor[]) ?? []);
         setProductos((prod as Producto[]) ?? []);
+        setCuentasBanco((bancos as CuentaBanco[]) ?? []);
+        setCuentasCaja((cajas as CuentaCaja[]) ?? []);
+        // Preseleccionar la primera cuenta disponible
+        if (bancos && bancos.length > 0) setCuentaBancoId(bancos[0].id);
+        if (cajas  && cajas.length  > 0) setCuentaCajaId(cajas[0].id);
       }
     }
     load();
   }, []);
+
+  // Actualizar tipo_persona cuando cambia el proveedor
+  useEffect(() => {
+    if (!proveedorId) { setProveedorTipo("juridica"); return; }
+    const prov = proveedores.find(p => p.id === proveedorId);
+    setProveedorTipo(prov?.tipo_persona ?? "juridica");
+  }, [proveedorId, proveedores]);
 
   function productosFiltrados(idx: number) {
     const b = busquedas[idx]?.toLowerCase() ?? "";
@@ -179,9 +204,12 @@ export default function NuevaCompraPage() {
     return { sub, iva, total: sub + iva };
   };
 
-  const subtotal = lineas.reduce((s, l) => s + calcLinea(l).sub, 0);
-  const ivaTotal = lineas.reduce((s, l) => s + calcLinea(l).iva, 0);
-  const total    = subtotal + ivaTotal;
+  const subtotal    = lineas.reduce((s, l) => s + calcLinea(l).sub, 0);
+  const ivaTotal    = lineas.reduce((s, l) => s + calcLinea(l).iva, 0);
+  const total       = subtotal + ivaTotal;
+  // ── Retención IR 2% solo para proveedor natural ────────────
+  const retencionIR = proveedorTipo === "natural" ? Math.round(subtotal * 0.02 * 100) / 100 : 0;
+  const totalPagar  = total - retencionIR;
 
   async function handleSave(estado: "borrador" | "recibida") {
     if (!empresaId) { toast.error("Configura tu empresa primero."); return; }
@@ -203,17 +231,25 @@ export default function NuevaCompraPage() {
       await supabase.from("consecutivos").insert({ empresa_id: empresaId, tipo: "compra", ultimo: 1, prefijo: "C", digitos: 6 });
     }
 
+    // ── Resolver cuenta banco/caja a pasar al trigger ──────────
+    const cuentaBancoFinal = tipoPago !== "contado" && tipoPago !== "credito" ? (cuentaBancoId || null) : null;
+    const cuentaCajaFinal  = tipoPago === "contado" ? (cuentaCajaId || null) : null;
+
     const { data: compra, error } = await supabase.from("compras").insert({
-      empresa_id:    empresaId,
-      numero_compra: numeroCompra,
-      proveedor_id:  proveedorId || null,
-      fecha_compra:  fechaCompra,
-      tipo_pago:     tipoPago,
+      empresa_id:     empresaId,
+      numero_compra:  numeroCompra,
+      proveedor_id:   proveedorId || null,
+      fecha_compra:   fechaCompra,
+      tipo_pago:      tipoPago,
       estado,
       subtotal,
-      iva_total:     ivaTotal,
+      iva_total:      ivaTotal,
       total,
-      notas:         [notas, numFacturaProveedor ? `Factura proveedor: ${numFacturaProveedor}` : ""].filter(Boolean).join(" | ") || null,
+      retencion_ir:   retencionIR,
+      total_a_pagar:  totalPagar,
+      cuenta_banco_id: cuentaBancoFinal,
+      cuenta_caja_id:  cuentaCajaFinal,
+      notas: [notas, numFacturaProveedor ? `Factura proveedor: ${numFacturaProveedor}` : ""].filter(Boolean).join(" | ") || null,
     }).select().single();
 
     if (error || !compra) { toast.error(`Error al guardar: ${error?.message}`); setSaving(false); return; }
@@ -221,43 +257,33 @@ export default function NuevaCompraPage() {
     await supabase.from("detalle_compras").insert(
       lineas.map(l => {
         const { sub, iva, total: tot } = calcLinea(l);
-        return { compra_id: compra.id, producto_id: l.producto_id || null, descripcion: l.descripcion, cantidad: l.cantidad, precio_unitario: l.precio_unitario, iva, total: tot };
+        return {
+          compra_id: compra.id,
+          producto_id: l.producto_id || null,
+          descripcion: l.descripcion,
+          cantidad: l.cantidad,
+          precio_unitario: l.precio_unitario,
+          iva,
+          total: tot,
+          // subtotal es columna generada (GENERATED ALWAYS), no enviar
+        };
       })
     );
 
+    // El trigger fn_mover_stock_entrada_compra / fn_stock_cambio_estado_compra
+    // ya maneja stock automáticamente. Solo insertar lotes_inventario si recibida.
     if (estado === "recibida") {
       for (const l of lineas) {
         if (!l.producto_id || l.cantidad <= 0) continue;
-        const { data: prod } = await supabase.from("productos").select("stock_actual").eq("id", l.producto_id).single();
-        const stockNuevo = Number(prod?.stock_actual ?? 0) + Number(l.cantidad);
-        await supabase.from("productos").update({ stock_actual: stockNuevo, precio_compra: l.precio_unitario }).eq("id", l.producto_id);
         await supabase.from("lotes_inventario").insert({
-          empresa_id: empresaId, producto_id: l.producto_id, compra_id: compra.id,
-          fecha_entrada: fechaCompra, cantidad_inicial: l.cantidad,
-          cantidad_restante: l.cantidad, costo_unitario: l.precio_unitario,
+          empresa_id:        empresaId,
+          producto_id:       l.producto_id,
+          compra_id:         compra.id,
+          fecha_entrada:     fechaCompra,
+          cantidad_inicial:  l.cantidad,
+          cantidad_restante: l.cantidad,
+          costo_unitario:    l.precio_unitario,
         });
-        await supabase.from("movimientos_inventario").insert({
-          empresa_id: empresaId, producto_id: l.producto_id, tipo: "entrada",
-          cantidad: l.cantidad, referencia: compra.id, notas: `Compra ${numeroCompra}`,
-        });
-      }
-    }
-
-    if (estado === "recibida" && tipoPago !== "credito") {
-      const descripcion = `Pago Compra ${numeroCompra}${numFacturaProveedor ? ` (Fact. Prov. ${numFacturaProveedor})` : ""}`;
-      const fecha = fechaCompra;
-      if (tipoPago === "contado") {
-        const cuentaCaja = await getPrimeraCuentaCaja(empresaId);
-        if (cuentaCaja) {
-          try { await crearMovimientoCaja(empresaId, { cuenta_caja_id: cuentaCaja.id, tipo: "egreso", monto: total, descripcion, fecha, ref_compra_id: compra.id }); }
-          catch (e) { console.error("Error al registrar en Caja:", e); }
-        }
-      } else {
-        const cuentaBanco = await getPrimeraCuentaBanco(empresaId);
-        if (cuentaBanco) {
-          try { await crearTransaccionBanco(empresaId, { cuenta_banco_id: cuentaBanco.id, tipo: tipoPago === "tarjeta" ? "tarjeta" : tipoPago, monto: total, descripcion, fecha, ref_compra_id: compra.id, es_egreso: true }); }
-          catch (e) { console.error("Error al registrar en Banco:", e); }
-        }
       }
     }
 
@@ -265,6 +291,7 @@ export default function NuevaCompraPage() {
     router.push("/dashboard/compras");
   }
 
+  // ── RENDER ──────────────────────────────────────────────────
   return (
     <div>
       <div className="flex items-center gap-3 mb-8">
@@ -286,9 +313,19 @@ export default function NuevaCompraPage() {
                 <label className="label">Proveedor</label>
                 <select className="input" value={proveedorId} onChange={e => setProveedorId(e.target.value)}>
                   <option value="">Sin proveedor</option>
-                  {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  {proveedores.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}{p.tipo_persona === "natural" ? " (Natural)" : ""}
+                    </option>
+                  ))}
                 </select>
+                {proveedorTipo === "natural" && (
+                  <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Persona natural — se aplicará retención IR 2%
+                  </p>
+                )}
               </div>
+
               <div>
                 <label className="label">Tipo de pago</label>
                 <select className="input" value={tipoPago} onChange={e => setTipoPago(e.target.value)}>
@@ -299,12 +336,35 @@ export default function NuevaCompraPage() {
                   <option value="credito">Crédito</option>
                 </select>
               </div>
+
+              {/* ── Selector de cuenta según tipo de pago ── */}
+              {tipoPago === "contado" && cuentasCaja.length > 0 && (
+                <div>
+                  <label className="label">Cuenta de caja</label>
+                  <select className="input" value={cuentaCajaId} onChange={e => setCuentaCajaId(e.target.value)}>
+                    {cuentasCaja.map(c => (
+                      <option key={c.id} value={c.id}>{c.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {(tipoPago === "transferencia" || tipoPago === "cheque" || tipoPago === "tarjeta") && cuentasBanco.length > 0 && (
+                <div>
+                  <label className="label">Cuenta bancaria</label>
+                  <select className="input" value={cuentaBancoId} onChange={e => setCuentaBancoId(e.target.value)}>
+                    {cuentasBanco.map(c => (
+                      <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="label">Fecha de compra</label>
                 <input type="date" className="input" value={fechaCompra} onChange={e => setFechaCompra(e.target.value)} />
               </div>
 
-              {/* ── NUEVO: Número de factura del proveedor ── */}
               <div>
                 <label className="label flex items-center gap-2">
                   <FileText className="w-3.5 h-3.5 text-slate-400" />
@@ -318,68 +378,55 @@ export default function NuevaCompraPage() {
                   value={numFacturaProveedor}
                   onChange={e => setNumFacturaProveedor(e.target.value.toUpperCase())}
                 />
-                <p className="text-xs text-slate-400 mt-1">
-                  Número impreso en la factura física que te entregó el proveedor
-                </p>
               </div>
             </div>
           </div>
 
-          {/* Artículos */}
+          {/* Líneas de detalle */}
           <div className="card">
-            <h2 className="font-semibold text-slate-900 mb-1">Artículos comprados</h2>
-            <p className="text-slate-400 text-xs mb-4">
-              Busca en tu inventario. Si el producto no existe, haz clic en <strong>&quot;+ Crear producto&quot;</strong> para agregarlo al momento.
-            </p>
-            <div className="space-y-3">
+            <h2 className="font-semibold text-slate-900 mb-4">Artículos</h2>
+            <div className="space-y-4">
               {lineas.map((l, idx) => (
-                <div key={idx} className="border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-3">
-                  <div className="grid grid-cols-12 gap-2">
+                <div key={idx} className="border border-slate-200 rounded-xl p-4 space-y-3">
+                  <div className="grid grid-cols-12 gap-3">
                     <div className="col-span-12 md:col-span-5 relative">
-                      <label className="label text-xs">Producto del inventario</label>
+                      <label className="label text-xs">Producto</label>
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                         <input
                           type="text"
-                          className="input text-sm pl-8"
-                          placeholder="Buscar o escribir nombre..."
+                          className="input pl-8 text-sm"
+                          placeholder="Buscar producto..."
                           value={busquedas[idx] ?? ""}
                           onChange={e => {
-                            const b = [...busquedas]; b[idx] = e.target.value;
-                            setBusquedas(b);
-                            setMostrarDropdown(idx);
+                            const nb = [...busquedas]; nb[idx] = e.target.value;
+                            setBusquedas(nb);
                             if (!e.target.value) updateLinea(idx, "producto_id", "");
+                            setMostrarDropdown(idx);
                           }}
                           onFocus={() => setMostrarDropdown(idx)}
-                          onBlur={() => setTimeout(() => setMostrarDropdown(null), 200)}
+                          onBlur={() => setTimeout(() => setMostrarDropdown(null), 150)}
                         />
                       </div>
                       {mostrarDropdown === idx && (
-                        <div className="absolute z-20 w-full bg-white border border-slate-200 rounded-lg shadow-lg mt-1 max-h-52 overflow-y-auto">
-                          {productosFiltrados(idx).length > 0 ? (
-                            <>
-                              {productosFiltrados(idx).map(p => (
-                                <button key={p.id} type="button"
-                                  className="w-full text-left px-3 py-2 hover:bg-brand-50 text-sm border-b border-slate-50 last:border-0"
-                                  onMouseDown={() => seleccionarProducto(idx, p)}
-                                >
-                                  <span className="font-medium">{p.nombre}</span>
-                                  <span className="text-slate-400 ml-2 text-xs">{p.codigo}</span>
-                                  <span className="float-right text-slate-500 text-xs">Stock: {p.stock_actual}</span>
-                                </button>
-                              ))}
-                              {(busquedas[idx] ?? "").length >= 2 && (
-                                <button type="button"
-                                  className="w-full text-left px-3 py-2 text-brand-700 hover:bg-brand-50 text-sm font-medium border-t border-slate-100 flex items-center gap-2"
-                                  onMouseDown={() => abrirNuevoProducto(idx)}
-                                >
-                                  <PackagePlus className="w-4 h-4" />
-                                  Crear &quot;{busquedas[idx]}&quot; como nuevo producto
-                                </button>
-                              )}
-                            </>
-                          ) : sinResultados(idx) ? (
-                            <button type="button"
+                        <div className="absolute z-20 w-full bg-white border border-slate-200 rounded-xl shadow-lg mt-1 max-h-52 overflow-y-auto">
+                          {productosFiltrados(idx).map(prod => (
+                            <button
+                              key={prod.id}
+                              type="button"
+                              className="w-full text-left px-4 py-2.5 hover:bg-brand-50 text-sm"
+                              onMouseDown={() => seleccionarProducto(idx, prod)}
+                            >
+                              <span className="font-medium">{prod.nombre}</span>
+                              <span className="text-slate-400 text-xs ml-2">{prod.codigo}</span>
+                              <span className={`text-xs ml-2 ${prod.stock_actual <= prod.stock_minimo ? "text-red-500" : "text-green-600"}`}>
+                                Stock: {prod.stock_actual}
+                              </span>
+                            </button>
+                          ))}
+                          {sinResultados(idx) ? (
+                            <button
+                              type="button"
                               className="w-full text-left px-4 py-3 hover:bg-brand-50 flex items-start gap-3"
                               onMouseDown={() => abrirNuevoProducto(idx)}
                             >
@@ -441,9 +488,10 @@ export default function NuevaCompraPage() {
                         <span className="badge-gray text-xs">Sin vincular al inventario</span>
                       ) : null}
                     </div>
-                    <span className="text-sm font-semibold text-slate-700">
-                      Total: {formatCurrency(calcLinea(l).total)}
-                    </span>
+                    <div className="text-right text-sm text-slate-600">
+                      <span className="text-xs text-slate-400 mr-2">Subtotal: {formatCurrency(calcLinea(l).sub)}</span>
+                      <span className="font-semibold text-slate-700">Total: {formatCurrency(calcLinea(l).total)}</span>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -466,14 +514,36 @@ export default function NuevaCompraPage() {
           <div className="card sticky top-6">
             <h2 className="font-semibold text-slate-900 mb-4">Resumen</h2>
             <div className="space-y-2 text-sm mb-4">
-              <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
-              <div className="flex justify-between text-slate-600"><span>IVA (15%)</span><span>{formatCurrency(ivaTotal)}</span></div>
-              <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-lg text-slate-900">
-                <span>Total</span><span>{formatCurrency(total)}</span>
+              <div className="flex justify-between text-slate-600">
+                <span>Subtotal</span><span>{formatCurrency(subtotal)}</span>
               </div>
+              <div className="flex justify-between text-slate-600">
+                <span>IVA (15%)</span><span>{formatCurrency(ivaTotal)}</span>
+              </div>
+              <div className="border-t border-slate-200 pt-2 flex justify-between font-bold text-base text-slate-900">
+                <span>Total factura</span><span>{formatCurrency(total)}</span>
+              </div>
+
+              {/* ── Retención IR 2% para proveedor natural ── */}
+              {retencionIR > 0 && (
+                <>
+                  <div className="flex justify-between text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5 mt-2">
+                    <span className="flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Retención IR 2% (Art. 44 LCT)
+                    </span>
+                    <span>- {formatCurrency(retencionIR)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-lg text-slate-900 border-t border-slate-200 pt-2">
+                    <span>Total a pagar</span><span>{formatCurrency(totalPagar)}</span>
+                  </div>
+                  <p className="text-xs text-amber-600">
+                    La retención se entera a la DGI. El proveedor recibe {formatCurrency(totalPagar)}.
+                  </p>
+                </>
+              )}
             </div>
 
-            {/* Referencia factura proveedor en el resumen */}
             {numFacturaProveedor && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800 text-xs mb-4 flex items-center gap-2">
                 <FileText className="w-4 h-4 flex-shrink-0" />
@@ -485,8 +555,8 @@ export default function NuevaCompraPage() {
             )}
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-800 text-xs mb-4">
-              <p className="font-semibold mb-1">📦 Método FIFO</p>
-              <p>Al <strong>Recibir</strong> la compra, el stock se actualiza automáticamente.</p>
+              <p className="font-semibold mb-1">📦 Inventario automático</p>
+              <p>Al <strong>Recibir</strong> la compra, el stock se actualiza y el asiento contable se genera.</p>
             </div>
             <div className="space-y-3">
               <button disabled={saving} onClick={() => handleSave("recibida")}
@@ -523,7 +593,7 @@ export default function NuevaCompraPage() {
                 💡 El precio de compra viene de la línea. El stock inicial será <strong>0</strong> y se sumará al recibir.
               </div>
               <div>
-                <label className="label">Código <span className="text-red-500">*</span> <span className="text-slate-400 font-normal ml-1">(puedes modificarlo)</span></label>
+                <label className="label">Código <span className="text-red-500">*</span></label>
                 <div className="flex gap-2">
                   <input className="input flex-1 font-mono uppercase" value={prodForm.codigo}
                     onChange={e => setProdForm(f => ({ ...f, codigo: e.target.value.toUpperCase().replace(/\s/g, "") }))}

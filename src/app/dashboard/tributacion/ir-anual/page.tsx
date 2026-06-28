@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { FileText, Calculator, CheckCircle, ArrowLeft, TrendingUp, TrendingDown } from 'lucide-react'
+import { FileText, Calculator, CheckCircle, ArrowLeft, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 
 interface DeclaracionIR {
@@ -26,10 +26,10 @@ interface DeclaracionIR {
   fecha_presentacion?: string
   fecha_pago?: string
   numero_declaracion?: string
+  notas?: string
 }
 
 const fmt  = (n: number) => new Intl.NumberFormat('es-NI', { style: 'currency', currency: 'NIO' }).format(n ?? 0)
-const pct  = (n: number) => `${(n * 100).toFixed(0)}%`
 
 export default function IrAnualPage() {
   const [declaraciones, setDeclaraciones] = useState<DeclaracionIR[]>([])
@@ -37,7 +37,6 @@ export default function IrAnualPage() {
   const [empresaId,     setEmpresaId]     = useState('')
   const [calculando,    setCalculando]    = useState(false)
   const [anioCalculo,   setAnioCalculo]   = useState(new Date().getFullYear() - 1)
-  // Modal presentar/pagar
   const [accionModal,   setAccionModal]   = useState<{ decl: DeclaracionIR; tipo: 'presentar'|'pagar' } | null>(null)
   const [numDecl,       setNumDecl]       = useState('')
   const [fechaAccion,   setFechaAccion]   = useState(new Date().toISOString().split('T')[0])
@@ -106,8 +105,11 @@ export default function IrAnualPage() {
     d.costo_ventas + d.gastos_administracion + d.gastos_ventas +
     d.gastos_financieros + d.depreciacion_fiscal + d.gastos_nomina + d.otros_gastos_deducibles
 
-  const rentaNetaGravable = (d: DeclaracionIR) =>
-    Math.max(0, d.renta_bruta_actividades + (d.otras_rentas_gravables ?? 0) - totalCostosGastos(d))
+  // ── CLAVE: renta neta puede ser negativa (pérdida) ────────────
+  const rentaNetaReal = (d: DeclaracionIR) =>
+    (d.renta_bruta_actividades + (d.otras_rentas_gravables ?? 0)) - totalCostosGastos(d)
+
+  const hayPerdida = (d: DeclaracionIR) => rentaNetaReal(d) < 0
 
   return (
     <div className="p-6 space-y-6 max-w-4xl">
@@ -150,9 +152,10 @@ export default function IrAnualPage() {
       ) : (
         <div className="space-y-6">
           {declaraciones.map(d => {
-            const rng = rentaNetaGravable(d)
-            const tcg = totalCostosGastos(d)
-            const usaPMD = d.pago_minimo_definitivo > d.ir_30_pct
+            const rng      = rentaNetaReal(d)       // puede ser negativo
+            const tcg      = totalCostosGastos(d)
+            const perdida  = hayPerdida(d)
+            const usaPMD   = !perdida && d.pago_minimo_definitivo > d.ir_30_pct
 
             return (
               <div key={d.id} className="border rounded-xl bg-white shadow-sm overflow-hidden">
@@ -165,6 +168,11 @@ export default function IrAnualPage() {
                       d.estado === 'presentada'? 'bg-blue-100  text-blue-700'  :
                                                  'bg-gray-100  text-gray-600'
                     }`}>{d.estado.toUpperCase()}</span>
+                    {perdida && (
+                      <span className="text-xs px-3 py-1 rounded-full font-medium bg-orange-100 text-orange-700 flex items-center gap-1">
+                        <AlertTriangle size={12} /> PÉRDIDA FISCAL
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     {d.estado === 'borrador' && (
@@ -183,6 +191,26 @@ export default function IrAnualPage() {
                 </div>
 
                 <div className="p-6 space-y-5">
+                  {/* Banner de pérdida fiscal */}
+                  {perdida && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex gap-3">
+                      <AlertTriangle size={20} className="text-orange-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold text-orange-800 text-sm">Pérdida fiscal del período</p>
+                        <p className="text-orange-700 text-sm mt-1">
+                          Los gastos deducibles superan los ingresos en{' '}
+                          <strong>{fmt(Math.abs(rng))}</strong>.
+                          La renta neta es negativa, por lo que el IR 30% es C$ 0.00.
+                        </p>
+                        <p className="text-orange-600 text-xs mt-2">
+                          LCT Art. 46 — Esta pérdida puede trasladarse y deducirse en los próximos 3 años fiscales.
+                          Sin embargo, el Pago Mínimo Definitivo del 1% sobre ingresos brutos sigue siendo obligatorio
+                          si hubo ventas (Art. 61 LCT). Consulte con su asesor fiscal.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Ingresos */}
                   <div>
                     <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">INGRESOS</h3>
@@ -225,29 +253,41 @@ export default function IrAnualPage() {
                     </div>
                   </div>
 
-                  {/* Renta Neta */}
-                  <div className="bg-slate-800 rounded-xl p-4 text-white">
+                  {/* Renta Neta — con soporte de pérdida */}
+                  <div className={`rounded-xl p-4 text-white ${perdida ? 'bg-orange-700' : 'bg-slate-800'}`}>
                     <div className="grid grid-cols-3 gap-4 text-center">
                       <div>
-                        <p className="text-xs text-slate-400">Renta Neta Gravable</p>
-                        <p className="text-xl font-bold">{fmt(rng)}</p>
+                        <p className="text-xs opacity-70">Renta Neta {perdida ? '(Pérdida)' : 'Gravable'}</p>
+                        <p className={`text-xl font-bold ${perdida ? 'text-orange-200' : 'text-white'}`}>
+                          {perdida ? `(${fmt(Math.abs(rng))})` : fmt(rng)}
+                        </p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-400">IR 30% sobre Renta Neta</p>
-                        <p className={`text-lg font-semibold ${usaPMD ? 'text-slate-400 line-through' : 'text-yellow-300'}`}>
+                        <p className="text-xs opacity-70">IR 30% sobre Renta Neta</p>
+                        <p className={`text-lg font-semibold ${
+                          perdida ? 'text-orange-300 line-through' :
+                          usaPMD  ? 'opacity-50 line-through' : 'text-yellow-300'
+                        }`}>
                           {fmt(d.ir_30_pct)}
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-400">Pago Mínimo Definitivo 1%</p>
-                        <p className={`text-lg font-semibold ${usaPMD ? 'text-yellow-300' : 'text-slate-400 line-through'}`}>
+                        <p className="text-xs opacity-70">Pago Mínimo Definitivo 1%</p>
+                        <p className={`text-lg font-semibold ${
+                          (usaPMD || perdida) && d.pago_minimo_definitivo > 0 ? 'text-yellow-300' : 'opacity-50 line-through'
+                        }`}>
                           {fmt(d.pago_minimo_definitivo)}
                         </p>
                       </div>
                     </div>
-                    {usaPMD && (
+                    {usaPMD && !perdida && (
                       <p className="text-center text-xs text-yellow-300 mt-2">
                         ⚠ Aplica Pago Mínimo Definitivo — el 1% supera el IR del 30% (LCT Art. 61)
+                      </p>
+                    )}
+                    {perdida && d.pago_minimo_definitivo > 0 && (
+                      <p className="text-center text-xs text-orange-200 mt-2">
+                        ⚠ Hay pérdida fiscal, pero el PMD 1% sobre ingresos brutos puede aplicar (Art. 61 LCT). Verifique con su asesor.
                       </p>
                     )}
                   </div>
@@ -257,13 +297,19 @@ export default function IrAnualPage() {
                     <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">LIQUIDACIÓN</h3>
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">IR a Pagar (el mayor entre IR30% y PMD)</span>
+                        <span className="text-gray-600">
+                          {perdida
+                            ? 'IR a Pagar (PMD 1% — aplica aun con pérdida)'
+                            : 'IR a Pagar (el mayor entre IR30% y PMD)'}
+                        </span>
                         <span className="font-semibold">{fmt(d.ir_a_pagar)}</span>
                       </div>
-                      <div className="flex justify-between text-sm text-green-700">
-                        <span>(-) Anticipos IR pagados durante {d.anio_fiscal}</span>
-                        <span className="font-semibold">- {fmt(d.anticipos_pagados)}</span>
-                      </div>
+                      {d.anticipos_pagados > 0 && (
+                        <div className="flex justify-between text-sm text-green-700">
+                          <span>(-) Anticipos IR pagados durante {d.anio_fiscal}</span>
+                          <span className="font-semibold">- {fmt(d.anticipos_pagados)}</span>
+                        </div>
+                      )}
                       {d.retenciones_recibidas > 0 && (
                         <div className="flex justify-between text-sm text-green-700">
                           <span>(-) Retenciones IR recibidas de clientes</span>
@@ -284,10 +330,29 @@ export default function IrAnualPage() {
                       </div>
                     </div>
 
-                    {d.ir_neto_pagar <= 0 && (
+                    {d.ir_neto_pagar <= 0 && !perdida && (
                       <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 flex gap-2 text-sm text-green-800">
                         <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />
                         Los anticipos pagados cubren el IR anual completo. No hay saldo adicional.
+                      </div>
+                    )}
+
+                    {perdida && d.ir_neto_pagar <= 0 && (
+                      <div className="mt-3 bg-orange-50 border border-orange-200 rounded-lg p-3 flex gap-2 text-sm text-orange-800">
+                        <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-semibold">Pérdida fiscal — sin IR neto a pagar</p>
+                          <p className="text-xs mt-1">
+                            Presente el F-106 en ceros en VET. Documente la pérdida para trasladarla a los próximos períodos (LCT Art. 46, máx. 3 años).
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Nota de pérdida guardada en DB */}
+                    {d.notas && d.notas.includes('PÉRDIDA') && (
+                      <div className="mt-2 text-xs text-orange-600 bg-orange-50 rounded-lg px-3 py-2">
+                        📋 {d.notas}
                       </div>
                     )}
 
@@ -322,6 +387,11 @@ export default function IrAnualPage() {
                   : `Saldo neto: ${fmt(accionModal.decl.ir_neto_pagar)}`
                 }
               </p>
+              {hayPerdida(accionModal.decl) && (
+                <p className="text-orange-600 text-xs mt-1 flex items-center gap-1">
+                  <AlertTriangle size={12} /> Período con pérdida fiscal — presente F-106 en ceros si aplica
+                </p>
+              )}
             </div>
 
             <div className="space-y-3">
