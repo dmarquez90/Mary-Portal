@@ -58,7 +58,7 @@ export interface Cliente {
 // ─── Proveedores ──────────────────────────────────────────────────────────────
 
 export interface Proveedor {
-  id: string;
+id: string;
   empresa_id: string;
   nombre: string;
   ruc?: string;
@@ -66,6 +66,7 @@ export interface Proveedor {
   telefono?: string;
   correo?: string;
   contacto?: string;
+  tipo_persona?: 'natural' | 'juridica' | 'cuota_fija' | 'gran_contribuyente';  // ← agregar esta línea
   activo: boolean;
   created_at: string;
 }
