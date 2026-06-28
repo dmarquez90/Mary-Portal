@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { CreditCard, AlertTriangle, Plus, X, TrendingDown, Clock, CheckCircle } from 'lucide-react'
@@ -65,7 +65,7 @@ export default function CxCPage() {
   })
   const [abono, setAbono] = useState<AbonoForm>(abonoVacio())
 
-  // ── Obtener empresa_id correctamente (igual que el resto de SARA) ──
+  // â”€â”€ Obtener empresa_id correctamente (igual que el resto de SARA) â”€â”€
   useEffect(() => {
     async function init() {
       const { createClient } = await import('@/lib/supabase/client')
@@ -121,7 +121,7 @@ export default function CxCPage() {
     if (!modalAbono) return
     setError('')
     if (!abono.monto || Number(abono.monto) <= 0) {
-      setError('Ingresa un monto válido'); return
+      setError('Ingresa un monto vÃ¡lido'); return
     }
     if (abono.forma_pago === 'efectivo' && !abono.cuenta_caja_id) {
       setError('Selecciona la cuenta de caja'); return
@@ -172,7 +172,7 @@ export default function CxCPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Cuentas por Cobrar (CxC)</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Cartera de crédito a clientes · Antigüedad de saldo · Pagos parciales
+          Cartera de crÃ©dito a clientes Â· AntigÃ¼edad de saldo Â· Pagos parciales
         </p>
       </div>
 
@@ -197,12 +197,12 @@ export default function CxCPage() {
           </div>
         </div>
         <div className="col-span-2 md:col-span-1 bg-white border rounded-xl p-4">
-          <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">Antigüedad</p>
+          <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">AntigÃ¼edad</p>
           <div className="space-y-1 text-xs">
-            {([['0-30 días', agingData['0-30'], 'text-green-600'],
-               ['31-60 días', agingData['31-60'], 'text-yellow-600'],
-               ['61-90 días', agingData['61-90'], 'text-orange-600'],
-               ['+90 días',  agingData['+90'],   'text-red-600']] as const).map(([label, monto, color]) => (
+            {([['0-30 dÃ­as', agingData['0-30'], 'text-green-600'],
+               ['31-60 dÃ­as', agingData['31-60'], 'text-yellow-600'],
+               ['61-90 dÃ­as', agingData['61-90'], 'text-orange-600'],
+               ['+90 dÃ­as',  agingData['+90'],   'text-red-600']] as [string, number, string][]).map(([label, monto, color]) => (
               <div key={label} className="flex justify-between">
                 <span className="text-gray-500">{label}</span>
                 <span className={`font-medium ${color}`}>{fmt(monto)}</span>
@@ -235,14 +235,14 @@ export default function CxCPage() {
       ) : saldos.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
           <CreditCard size={40} className="mx-auto mb-2 opacity-30" />
-          <p>No hay registros en esta categoría</p>
+          <p>No hay registros en esta categorÃ­a</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-white">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                {['Factura', 'Cliente', 'Emisión', 'Vencimiento', 'Total', 'Abonado', 'Saldo', 'Estado', ''].map(h => (
+                {['Factura', 'Cliente', 'EmisiÃ³n', 'Vencimiento', 'Total', 'Abonado', 'Saldo', 'Estado', ''].map(h => (
                   <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">
                     {h}
                   </th>
@@ -261,14 +261,14 @@ export default function CxCPage() {
                     {s.numero_factura}
                   </td>
                   <td className="px-3 py-3">
-                    <p className="font-medium text-gray-900 leading-tight">{s.cliente?.nombre ?? '—'}</p>
+                    <p className="font-medium text-gray-900 leading-tight">{s.cliente?.nombre ?? 'â€”'}</p>
                     {s.cliente?.telefono && (
                       <p className="text-xs text-gray-400">{s.cliente.telefono}</p>
                     )}
                   </td>
                   <td className="px-3 py-3 text-xs text-gray-500">{s.fecha_emision}</td>
                   <td className={`px-3 py-3 text-xs ${s.estado_cobro === 'vencida' ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                    {s.fecha_vencimiento ?? '—'}
+                    {s.fecha_vencimiento ?? 'â€”'}
                     {s.dias_vencido > 0 && (
                       <span className="ml-1 text-red-500">+{s.dias_vencido}d</span>
                     )}
@@ -393,7 +393,7 @@ export default function CxCPage() {
                     value={abono.cuenta_caja_id}
                     onChange={e => setAbono({ ...abono, cuenta_caja_id: e.target.value })}
                   >
-                    <option value="">— Seleccionar —</option>
+                    <option value="">â€” Seleccionar â€”</option>
                     {cajas.map(c => (
                       <option key={c.id} value={c.id}>{c.nombre}</option>
                     ))}
@@ -412,9 +412,9 @@ export default function CxCPage() {
                     value={abono.cuenta_banco_id}
                     onChange={e => setAbono({ ...abono, cuenta_banco_id: e.target.value })}
                   >
-                    <option value="">— Seleccionar —</option>
+                    <option value="">â€” Seleccionar â€”</option>
                     {bancos.map(b => (
-                      <option key={b.id} value={b.id}>{b.nombre} — {b.banco}</option>
+                      <option key={b.id} value={b.id}>{b.nombre} â€” {b.banco}</option>
                     ))}
                   </select>
                 </div>
@@ -463,3 +463,4 @@ export default function CxCPage() {
     </div>
   )
 }
+
