@@ -1,9 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { FileText, Printer, BarChart3, Users, ChevronDown } from 'lucide-react'
 
-interface Cliente { id: string; nombre: string; ruc?: string; telefono?: string }
+interface Cliente { id: string; nombre: string; ruc?: string; telefono?: string; correo?: string }
 interface Saldo {
   factura_id: string; numero_factura: string; fecha_emision: string
   fecha_vencimiento?: string; monto_original: number; total_abonado: number
@@ -23,7 +23,7 @@ const fmt = (n: number) =>
 const fmtFecha = (f: string) =>
   new Date(f + 'T00:00:00').toLocaleDateString('es-NI', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
-// ── Función de impresión: Estado de Cuenta ──────────────────
+// â”€â”€ FunciÃ³n de impresiÃ³n: Estado de Cuenta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function imprimirEstadoCuenta(empresa: Empresa, cliente: Cliente, saldos: Saldo[], abonos: Abono[], fechaReporte: string) {
   const totalPendiente = saldos.filter(s => s.estado_cobro !== 'pagada').reduce((a, s) => a + s.saldo_pendiente, 0)
   const totalOriginal  = saldos.reduce((a, s) => a + s.monto_original, 0)
@@ -33,7 +33,7 @@ function imprimirEstadoCuenta(empresa: Empresa, cliente: Cliente, saldos: Saldo[
     <tr style="background:${i%2===0?'#f8fafc':'#fff'}">
       <td style="padding:7px 10px;font-size:12px;font-family:monospace">${s.numero_factura}</td>
       <td style="padding:7px 10px;font-size:12px">${fmtFecha(s.fecha_emision)}</td>
-      <td style="padding:7px 10px;font-size:12px">${s.fecha_vencimiento ? fmtFecha(s.fecha_vencimiento) : '—'}</td>
+      <td style="padding:7px 10px;font-size:12px">${s.fecha_vencimiento ? fmtFecha(s.fecha_vencimiento) : 'â€”'}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right">${fmt(s.monto_original)}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;color:#16a34a">${fmt(s.total_abonado)}</td>
       <td style="padding:7px 10px;font-size:12px;text-align:right;font-weight:700;color:${s.estado_cobro==='vencida'?'#dc2626':'#1d4ed8'}">${fmt(s.saldo_pendiente)}</td>
@@ -46,14 +46,14 @@ function imprimirEstadoCuenta(empresa: Empresa, cliente: Cliente, saldos: Saldo[
   const filasAbonos = abonos.map((a, i) => `
     <tr style="background:${i%2===0?'#f0fdf4':'#fff'}">
       <td style="padding:6px 10px;font-size:11px">${fmtFecha(a.fecha)}</td>
-      <td style="padding:6px 10px;font-size:11px;font-family:monospace">${saldos.find(s=>s.factura_id===a.factura_id)?.numero_factura??'—'}</td>
+      <td style="padding:6px 10px;font-size:11px;font-family:monospace">${saldos.find(s=>s.factura_id===a.factura_id)?.numero_factura??'â€”'}</td>
       <td style="padding:6px 10px;font-size:11px">${a.forma_pago.charAt(0).toUpperCase()+a.forma_pago.slice(1)}</td>
-      <td style="padding:6px 10px;font-size:11px">${a.referencia??'—'}</td>
+      <td style="padding:6px 10px;font-size:11px">${a.referencia??'â€”'}</td>
       <td style="padding:6px 10px;font-size:11px;text-align:right;font-weight:600;color:#16a34a">${fmt(a.monto)}</td>
     </tr>`).join('')
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
-  <title>Estado de Cuenta — ${cliente.nombre}</title>
+  <title>Estado de Cuenta â€” ${cliente.nombre}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:Arial,sans-serif;color:#1e293b;background:#fff;padding:28px;font-size:13px}
@@ -104,7 +104,7 @@ function imprimirEstadoCuenta(empresa: Empresa, cliente: Cliente, saldos: Saldo[
   <h3>Facturas</h3>
   <table>
     <thead><tr>
-      <th>N° Factura</th><th>Emisión</th><th>Vencimiento</th><th>Total</th><th>Abonado</th><th>Saldo</th><th style="text-align:center">Estado</th>
+      <th>NÂ° Factura</th><th>EmisiÃ³n</th><th>Vencimiento</th><th>Total</th><th>Abonado</th><th>Saldo</th><th style="text-align:center">Estado</th>
     </tr></thead>
     <tbody>${filasSaldos}</tbody>
     <tfoot><tr>
@@ -122,7 +122,7 @@ function imprimirEstadoCuenta(empresa: Empresa, cliente: Cliente, saldos: Saldo[
     <tbody>${filasAbonos}</tbody>
     <tfoot><tr><td colspan="4">TOTAL COBRADO</td><td>${fmt(abonos.reduce((a,b)=>a+b.monto,0))}</td></tr></tfoot>
   </table>` : ''}
-  <div class="pie">SARA — Sistema Automatizado de Registro Administrativo · Reporte generado el ${fmtFecha(fechaReporte)}</div>
+  <div class="pie">SARA â€” Sistema Automatizado de Registro Administrativo Â· Reporte generado el ${fmtFecha(fechaReporte)}</div>
   <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}</script>
   </body></html>`
 
@@ -130,7 +130,7 @@ function imprimirEstadoCuenta(empresa: Empresa, cliente: Cliente, saldos: Saldo[
   if (w) { w.document.write(html); w.document.close() }
 }
 
-// ── Función de impresión: Aging Report ─────────────────────
+// â”€â”€ FunciÃ³n de impresiÃ³n: Aging Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function imprimirAging(empresa: Empresa, filas: FilaAging[], fechaReporte: string) {
   const tot0  = filas.reduce((a,f)=>a+f.rango_0_30,0)
   const tot31 = filas.reduce((a,f)=>a+f.rango_31_60,0)
@@ -179,24 +179,24 @@ function imprimirAging(empresa: Empresa, filas: FilaAging[], fechaReporte: strin
       <div class="emp-info">RUC: ${empresa.ruc}<br/>${empresa.direccion}</div>
     </div>
     <div>
-      <div class="titulo">ANTIGÜEDAD DE SALDOS (CxC)</div>
-      <div class="sub">Cuentas por Cobrar · ${filas.length} cliente(s)<br/>Fecha: ${fmtFecha(fechaReporte)}</div>
+      <div class="titulo">ANTIGÃœEDAD DE SALDOS (CxC)</div>
+      <div class="sub">Cuentas por Cobrar Â· ${filas.length} cliente(s)<br/>Fecha: ${fmtFecha(fechaReporte)}</div>
     </div>
   </div>
   <hr/>
   <div class="resumen">
-    <div class="rcard" style="background:#f0fdf4"><div class="rcard-label" style="color:#166534">0–30 días</div><div class="rcard-val" style="color:#16a34a">${fmt(tot0)}</div></div>
-    <div class="rcard" style="background:#fefce8"><div class="rcard-label" style="color:#854d0e">31–60 días</div><div class="rcard-val" style="color:#ca8a04">${fmt(tot31)}</div></div>
-    <div class="rcard" style="background:#fff7ed"><div class="rcard-label" style="color:#9a3412">61–90 días</div><div class="rcard-val" style="color:#ea580c">${fmt(tot61)}</div></div>
-    <div class="rcard" style="background:#fef2f2"><div class="rcard-label" style="color:#991b1b">+90 días</div><div class="rcard-val" style="color:#dc2626">${fmt(tot90)}</div></div>
+    <div class="rcard" style="background:#f0fdf4"><div class="rcard-label" style="color:#166534">0â€“30 dÃ­as</div><div class="rcard-val" style="color:#16a34a">${fmt(tot0)}</div></div>
+    <div class="rcard" style="background:#fefce8"><div class="rcard-label" style="color:#854d0e">31â€“60 dÃ­as</div><div class="rcard-val" style="color:#ca8a04">${fmt(tot31)}</div></div>
+    <div class="rcard" style="background:#fff7ed"><div class="rcard-label" style="color:#9a3412">61â€“90 dÃ­as</div><div class="rcard-val" style="color:#ea580c">${fmt(tot61)}</div></div>
+    <div class="rcard" style="background:#fef2f2"><div class="rcard-label" style="color:#991b1b">+90 dÃ­as</div><div class="rcard-val" style="color:#dc2626">${fmt(tot90)}</div></div>
     <div class="rcard" style="background:#eff6ff"><div class="rcard-label" style="color:#1e40af">TOTAL</div><div class="rcard-val" style="color:#1d4ed8">${fmt(totT)}</div></div>
   </div>
   <table>
-    <thead><tr><th style="text-align:left">Cliente</th><th style="text-align:left">RUC</th><th>0–30 días</th><th>31–60 días</th><th>61–90 días</th><th>+90 días</th><th>TOTAL</th></tr></thead>
+    <thead><tr><th style="text-align:left">Cliente</th><th style="text-align:left">RUC</th><th>0â€“30 dÃ­as</th><th>31â€“60 dÃ­as</th><th>61â€“90 dÃ­as</th><th>+90 dÃ­as</th><th>TOTAL</th></tr></thead>
     <tbody>${filasTbl}</tbody>
     <tfoot><tr><td>TOTALES</td><td></td><td>${fmt(tot0)}</td><td>${fmt(tot31)}</td><td>${fmt(tot61)}</td><td>${fmt(tot90)}</td><td>${fmt(totT)}</td></tr></tfoot>
   </table>
-  <div class="pie">SARA — Sistema Administrativo · Reporte generado el ${fmtFecha(fechaReporte)}</div>
+  <div class="pie">SARA â€” Sistema Administrativo Â· Reporte generado el ${fmtFecha(fechaReporte)}</div>
   <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}</script>
   </body></html>`
 
@@ -204,7 +204,7 @@ function imprimirAging(empresa: Empresa, filas: FilaAging[], fechaReporte: strin
   if (w) { w.document.write(html); w.document.close() }
 }
 
-// ── Componente principal ────────────────────────────────────
+// â”€â”€ Componente principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function CxCReportesPage() {
   const [empresaId,    setEmpresaId]    = useState('')
   const [clientes,     setClientes]     = useState<Cliente[]>([])
@@ -227,10 +227,10 @@ export default function CxCReportesPage() {
       const eid = nat?.id ?? jur?.id ?? ''
       setEmpresaId(eid)
       if (nat) setEmpresa({ nombre: nat.nombre_completo, ruc: nat.numero_ruc, direccion: nat.direccion, correo: nat.correo_electronico, telefono: nat.telefono })
-      if (jur) setEmpresa({ nombre: jur.nombre_empresa, ruc: jur.numero_ruc, direccion: jur.direccion_legal, correo: jur.correo_electronico, telefono: null })
+      if (jur) setEmpresa({ nombre: jur.nombre_empresa, ruc: jur.numero_ruc, direccion: jur.direccion_legal, correo: jur.correo_electronico, telefono: undefined })
 
       if (eid) {
-        const { data: cl } = await supabase.from('clientes').select('id, nombre, ruc, telefono').eq('empresa_id', eid).eq('activo', true).order('nombre')
+        const { data: cl } = await supabase.from('clientes').select('id, nombre, ruc, telefono, correo').eq('empresa_id', eid).eq('activo', true).order('nombre')
         setClientes(cl ?? [])
       }
     }
@@ -280,7 +280,7 @@ export default function CxCReportesPage() {
               value={clienteId}
               onChange={e => setClienteId(e.target.value)}
             >
-              <option value="">— Seleccionar cliente —</option>
+              <option value="">â€” Seleccionar cliente â€”</option>
               {clientes.map(c => (
                 <option key={c.id} value={c.id}>{c.nombre}{c.ruc ? ` (${c.ruc})` : ''}</option>
               ))}
@@ -303,12 +303,12 @@ export default function CxCReportesPage() {
         <div className="flex items-start gap-3">
           <div className="p-2 bg-orange-100 rounded-xl"><BarChart3 className="text-orange-600" size={20} /></div>
           <div>
-            <h2 className="font-bold text-gray-900">Reporte de Antigüedad (Aging)</h2>
-            <p className="text-sm text-gray-500">Toda la cartera clasificada por 0–30 / 31–60 / 61–90 / +90 días. Requerido por bancos y auditores.</p>
+            <h2 className="font-bold text-gray-900">Reporte de AntigÃ¼edad (Aging)</h2>
+            <p className="text-sm text-gray-500">Toda la cartera clasificada por 0â€“30 / 31â€“60 / 61â€“90 / +90 dÃ­as. Requerido por bancos y auditores.</p>
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs">
-          {[['0–30 días', 'bg-green-50 text-green-700'], ['31–60 días', 'bg-yellow-50 text-yellow-700'], ['61–90 días', 'bg-orange-50 text-orange-700'], ['+90 días', 'bg-red-50 text-red-700']].map(([label, cls]) => (
+          {[['0â€“30 dÃ­as', 'bg-green-50 text-green-700'], ['31â€“60 dÃ­as', 'bg-yellow-50 text-yellow-700'], ['61â€“90 dÃ­as', 'bg-orange-50 text-orange-700'], ['+90 dÃ­as', 'bg-red-50 text-red-700']].map(([label, cls]) => (
             <div key={label} className={`rounded-lg py-2 px-3 font-semibold ${cls}`}>{label}</div>
           ))}
         </div>
@@ -324,9 +324,12 @@ export default function CxCReportesPage() {
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-        <p className="font-semibold mb-1">ℹ️ Nota sobre reportes DGI</p>
-        <p>Estos reportes son para uso interno y gestión de cobros. Los reportes oficiales para la DGI (Planilla de Ingresos, Crédito Fiscal IVA, Retenciones) se encuentran en el módulo <strong>Reportes DGI</strong>. Los abonos CxC no se reportan directamente a la DGI — Nicaragua usa el criterio de <strong>devengo</strong> (la factura se declara cuando se emite, no cuando se cobra).</p>
+        <p className="font-semibold mb-1">â„¹ï¸ Nota sobre reportes DGI</p>
+        <p>Estos reportes son para uso interno y gestiÃ³n de cobros. Los reportes oficiales para la DGI (Planilla de Ingresos, CrÃ©dito Fiscal IVA, Retenciones) se encuentran en el mÃ³dulo <strong>Reportes DGI</strong>. Los abonos CxC no se reportan directamente a la DGI â€” Nicaragua usa el criterio de <strong>devengo</strong> (la factura se declara cuando se emite, no cuando se cobra).</p>
       </div>
     </div>
   )
 }
+
+
+
