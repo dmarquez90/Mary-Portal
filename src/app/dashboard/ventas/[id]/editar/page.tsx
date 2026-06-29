@@ -226,13 +226,6 @@ export default function EditarFacturaPage() {
     );
 
     if (detError) {
-      // Si falla el insert de detalles (ej: stock insuficiente bloqueado por trigger),
-      // eliminar la cabecera huérfana y mostrar el error real
-      await supabase.from("facturas").delete().eq("id", factura.id);
-      // Devolver el consecutivo
-      if (cons) {
-        await supabase.from("consecutivos").update({ ultimo: cons.ultimo }).eq("id", cons.id);
-      }
       toast.error(detError.message.includes("Stock insuficiente")
         ? detError.message
         : `Error al guardar los detalles: ${detError.message}`,
@@ -243,7 +236,7 @@ export default function EditarFacturaPage() {
     }
 
     toast.success(
-      `Factura ${numeroFactura} ${estado === "emitida" ? "emitida ✓" : "guardada como borrador"}`,
+      `Factura ${factura.numero_factura} ${estado === "emitida" ? "emitida ✓" : "guardada como borrador"}`,
       { duration: 4000 }
     );
     router.push("/dashboard/ventas");

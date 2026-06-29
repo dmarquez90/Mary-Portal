@@ -304,7 +304,7 @@ export default function EditarCompraPage() {
       }
     }
 
-    toast.success(`Compra ${numeroCompra} ${estado === "recibida" ? "recibida — inventario actualizado" : "guardada como borrador"}`);
+    toast.success(`Compra ${compra.numero_compra} ${estado === "recibida" ? "recibida — inventario actualizado" : "guardada como borrador"}`);
     router.push("/dashboard/compras");
   }
 
