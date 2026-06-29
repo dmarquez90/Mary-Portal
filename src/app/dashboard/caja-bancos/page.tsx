@@ -15,7 +15,7 @@ interface CuentaCaja {
   saldo_actual: number; saldo_inicial: number; limite_caja_chica: number | null; activa: boolean; notas: string | null
 }
 interface TransaccionBanco {
-  id: string; cuenta_banco_id: string; tipo: string; monto: number
+  id: string; cuenta_banco_id: string; tipo: string; direccion: string | null; monto: number
   monto_usd: number | null; tipo_cambio: number | null; descripcion: string
   fecha: string; referencia: string | null; estado: string
   cuentas_banco?: { nombre: string; banco: string | null; moneda: string }
@@ -29,7 +29,7 @@ interface Cheque {
   id: string; cuenta_banco_id: string; numero_cheque: string; tipo: string
   monto: number; beneficiario: string | null; fecha_emision: string
   fecha_vencimiento: string | null; estado: string; notas: string | null
-  cuentas_banco?: { nombre: string; banco: string | null }
+  cuentas_banco?: { nombre: string; banco: string | null; moneda: string }
 }
 interface Resumen {
   totalNIO: number; totalUSD: number; totalCaja: number
@@ -131,7 +131,7 @@ export default function CajaBancosPage() {
   // Forms
   const [formBanco, setFormBanco] = useState({ nombre: '', banco: '', numero_cuenta: '', tipo: 'corriente', moneda: 'NIO', saldo_inicial: '', notas: '' })
   const [formCaja, setFormCaja] = useState({ nombre: '', tipo: 'caja_general', moneda: 'NIO', saldo_inicial: '', limite_caja_chica: '', notas: '' })
-  const [formTx, setFormTx] = useState({ cuenta_banco_id: '', tipo: 'deposito', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '' })
+  const [formTx, setFormTx] = useState({ cuenta_banco_id: '', direccion: 'entrada', tipo: 'deposito', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '' })
   const [formMovCaja, setFormMovCaja] = useState({ cuenta_caja_id: '', tipo: 'ingreso', monto: '', descripcion: '', fecha: hoy(), notas: '' })
   const [formCheque, setFormCheque] = useState({ cuenta_banco_id: '', numero_cheque: '', tipo: 'cobro', monto: '', beneficiario: '', fecha_emision: hoy(), fecha_vencimiento: '', notas: '' })
 
@@ -228,7 +228,7 @@ export default function CajaBancosPage() {
     const d = await r.json()
     if (!r.ok) { setError(d.error || 'Error al guardar'); setGuardando(false); return }
     setModalTx(false)
-    setFormTx({ cuenta_banco_id: '', tipo: 'deposito', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '' })
+    setFormTx({ cuenta_banco_id: '', direccion: 'entrada', tipo: 'deposito', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '' })
     cargarTx(); cargarResumen(); cargarBancos()
     setGuardando(false)
   }
@@ -576,8 +576,8 @@ export default function CajaBancosPage() {
                       </td>
                       <td className="px-4 py-2.5 text-gray-700 max-w-[200px] truncate">{t.descripcion}</td>
                       <td className="px-4 py-2.5 text-gray-500 text-xs font-mono">{t.referencia || '—'}</td>
-                      <td className={`px-4 py-2.5 text-right font-semibold ${t.tipo === 'ingreso' ? 'text-green-700' : 'text-red-700'}`}>
-                        {t.tipo === 'ingreso' ? '+' : '-'}{fmt(t.monto, t.cuentas_banco?.moneda)}
+                      <td className={`px-4 py-2.5 text-right font-semibold ${(t.direccion ? t.direccion === 'entrada' : ['ingreso','deposito','cobro','transferencia'].includes(t.tipo)) ? 'text-green-700' : 'text-red-700'}`}>
+                        {(t.direccion ? t.direccion === 'entrada' : ['ingreso','deposito','cobro','transferencia'].includes(t.tipo)) ? '+' : '-'}{fmt(t.monto, t.cuentas_banco?.moneda)}
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${TIPO_BADGE[t.estado] || 'bg-gray-100 text-gray-600'}`}>{t.estado}</span>
@@ -627,7 +627,7 @@ export default function CajaBancosPage() {
                       <td className="px-4 py-2.5 text-gray-700">{c.beneficiario || '—'}</td>
                       <td className="px-4 py-2.5 text-gray-500">{fmtFecha(c.fecha_emision)}</td>
                       <td className="px-4 py-2.5 text-gray-500">{c.fecha_vencimiento ? fmtFecha(c.fecha_vencimiento) : '—'}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{fmt(c.monto)}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{fmt(c.monto, c.cuentas_banco?.moneda ?? 'NIO')}
                       <td className="px-4 py-2.5 text-center">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${TIPO_BADGE[c.estado] || 'bg-gray-100 text-gray-600'}`}>{c.estado}</span>
                       </td>
@@ -742,33 +742,51 @@ export default function CajaBancosPage() {
             </select>
           </Campo>
           <div className="grid grid-cols-2 gap-3">
-            <Campo label="Tipo *">
-              <select className={inputCls} value={formTx.tipo} onChange={e => setFormTx({...formTx, tipo: e.target.value})}>
-                <option value="deposito">Depósito</option>
-                <option value="transferencia">Transferencia</option>
-                <option value="ingreso">Ingreso general</option>
-                <option value="retiro">Retiro</option>
-                <option value="egreso">Egreso general</option>
-                <option value="cheque">Cheque</option>
-                <option value="tarjeta_debito">Tarjeta débito</option>
-                <option value="tarjeta_credito">Tarjeta crédito</option>
+            <Campo label="Dirección *">
+              <select className={inputCls} value={formTx.direccion} onChange={e => setFormTx({...formTx, direccion: e.target.value, tipo: e.target.value === 'entrada' ? 'deposito' : 'retiro'})}>
+                <option value="entrada">↓ Entrada (ingreso)</option>
+                <option value="salida">↑ Salida (egreso)</option>
               </select>
+            </Campo>
+            <Campo label="Método de pago *">
+              <select className={inputCls} value={formTx.tipo} onChange={e => setFormTx({...formTx, tipo: e.target.value})}>
+                {formTx.direccion === 'entrada' ? (
+                  <>
+                    <option value="deposito">Depósito</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="cobro">Cobro en efectivo</option>
+                    <option value="deposito_cheque">Cheque depositado</option>
+                    <option value="tarjeta">Tarjeta / POS</option>
+                    <option value="ingreso">Otro ingreso</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="retiro">Retiro</option>
+                    <option value="transferencia_salida">Transferencia</option>
+                    <option value="cheque">Cheque emitido</option>
+                    <option value="tarjeta">Tarjeta débito</option>
+                    <option value="egreso">Otro egreso</option>
+                  </>
+                )}
+              </select>
+            </Campo>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Campo label={`Monto (${cuentasBanco.find(c => c.id === formTx.cuenta_banco_id)?.moneda ?? 'NIO'}) *`}>
+              <input type="number" min="0.01" step="0.01" className={inputCls} value={formTx.monto} onChange={e => setFormTx({...formTx, monto: e.target.value})} placeholder="0.00" />
             </Campo>
             <Campo label="Fecha *">
               <input type="date" className={inputCls} value={formTx.fecha} onChange={e => setFormTx({...formTx, fecha: e.target.value})} />
             </Campo>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Campo label="Monto (NIO) *">
-              <input type="number" min="0.01" step="0.01" className={inputCls} value={formTx.monto} onChange={e => setFormTx({...formTx, monto: e.target.value})} placeholder="0.00" />
+            <Campo label="Descripción *">
+              <input className={inputCls} value={formTx.descripcion} onChange={e => setFormTx({...formTx, descripcion: e.target.value})} placeholder="Concepto de la transacción" />
             </Campo>
             <Campo label="Referencia / No. comprobante">
               <input className={inputCls} value={formTx.referencia} onChange={e => setFormTx({...formTx, referencia: e.target.value})} placeholder="Ej: TRF-0001" />
             </Campo>
           </div>
-          <Campo label="Descripción *">
-            <input className={inputCls} value={formTx.descripcion} onChange={e => setFormTx({...formTx, descripcion: e.target.value})} placeholder="Concepto de la transacción" />
-          </Campo>
           {cuentasBanco.find(c => c.id === formTx.cuenta_banco_id)?.moneda === 'USD' && (
             <div className="grid grid-cols-2 gap-3">
               <Campo label="Monto USD">

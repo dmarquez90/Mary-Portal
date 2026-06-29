@@ -22,7 +22,7 @@ export async function GET(req: Request) {
 
   let query = supabase
     .from('cheques')
-    .select('*, cuentas_banco(nombre, banco)')
+    .select('*, cuentas_banco(nombre, banco, moneda)')
     .eq('empresa_id', empresaId)
     .order('fecha_emision', { ascending: false })
 

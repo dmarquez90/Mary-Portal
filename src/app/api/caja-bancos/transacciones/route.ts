@@ -11,7 +11,10 @@ async function getEmpresaId(supabase: any, userId: string) {
 }
 
 // Tipos que representan ENTRADA de dinero a la cuenta
-const TIPOS_INGRESO = new Set(['ingreso', 'deposito', 'transferencia'])
+const TIPOS_INGRESO = new Set([
+  'ingreso', 'deposito', 'transferencia', 'cobro',
+  'deposito_cheque', 'transferencia_entrada',
+])
 
 export async function GET(req: Request) {
   const supabase = await createClient()
@@ -45,13 +48,14 @@ export async function POST(req: Request) {
   if (!empresaId) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
   const body = await req.json()
-  const { cuenta_banco_id, tipo, monto, descripcion, fecha, referencia, monto_usd, tipo_cambio, notas } = body
+  const { cuenta_banco_id, tipo, direccion, monto, descripcion, fecha, referencia, monto_usd, tipo_cambio, notas } = body
 
   if (!cuenta_banco_id || !tipo || !monto || !descripcion || !fecha)
     return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
 
   const montoNum = Number(monto)
-  const esIngreso = TIPOS_INGRESO.has(tipo)
+  // Si el frontend envía 'direccion', usarlo como fuente de verdad. Si no, inferir del tipo.
+  const esIngreso = direccion ? direccion === 'entrada' : TIPOS_INGRESO.has(tipo)
 
   // Insertar transacción
   const { data: tx, error: txErr } = await supabase
