@@ -131,7 +131,7 @@ export default function CajaBancosPage() {
   // Forms
   const [formBanco, setFormBanco] = useState({ nombre: '', banco: '', numero_cuenta: '', tipo: 'corriente', moneda: 'NIO', saldo_inicial: '', notas: '' })
   const [formCaja, setFormCaja] = useState({ nombre: '', tipo: 'caja_general', moneda: 'NIO', saldo_inicial: '', limite_caja_chica: '', notas: '' })
-  const [formTx, setFormTx] = useState({ cuenta_banco_id: '', tipo: 'ingreso', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '' })
+  const [formTx, setFormTx] = useState({ cuenta_banco_id: '', tipo: 'deposito', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '' })
   const [formMovCaja, setFormMovCaja] = useState({ cuenta_caja_id: '', tipo: 'ingreso', monto: '', descripcion: '', fecha: hoy(), notas: '' })
   const [formCheque, setFormCheque] = useState({ cuenta_banco_id: '', numero_cheque: '', tipo: 'cobro', monto: '', beneficiario: '', fecha_emision: hoy(), fecha_vencimiento: '', notas: '' })
 
@@ -226,7 +226,7 @@ export default function CajaBancosPage() {
     const d = await r.json()
     if (!r.ok) { setError(d.error || 'Error al guardar'); setGuardando(false); return }
     setModalTx(false)
-    setFormTx({ cuenta_banco_id: '', tipo: 'ingreso', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '' })
+    setFormTx({ cuenta_banco_id: '', tipo: 'deposito', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '' })
     cargarTx(); cargarResumen(); cargarBancos()
     setGuardando(false)
   }
@@ -742,8 +742,14 @@ export default function CajaBancosPage() {
           <div className="grid grid-cols-2 gap-3">
             <Campo label="Tipo *">
               <select className={inputCls} value={formTx.tipo} onChange={e => setFormTx({...formTx, tipo: e.target.value})}>
-                <option value="ingreso">Ingreso</option>
-                <option value="egreso">Egreso</option>
+                <option value="deposito">Depósito</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="ingreso">Ingreso general</option>
+                <option value="retiro">Retiro</option>
+                <option value="egreso">Egreso general</option>
+                <option value="cheque">Cheque</option>
+                <option value="tarjeta_debito">Tarjeta débito</option>
+                <option value="tarjeta_credito">Tarjeta crédito</option>
               </select>
             </Campo>
             <Campo label="Fecha *">

@@ -10,6 +10,9 @@ async function getEmpresaId(supabase: any, userId: string) {
   return en?.id ?? ej?.id ?? null
 }
 
+// Tipos que representan ENTRADA de dinero a la cuenta
+const TIPOS_INGRESO = new Set(['ingreso', 'deposito', 'transferencia'])
+
 export async function GET(req: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -48,6 +51,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
 
   const montoNum = Number(monto)
+  const esIngreso = TIPOS_INGRESO.has(tipo)
 
   // Insertar transacción
   const { data: tx, error: txErr } = await supabase
@@ -70,7 +74,7 @@ export async function POST(req: Request) {
 
   if (txErr) return NextResponse.json({ error: txErr.message }, { status: 500 })
 
-  // Actualizar saldo de la cuenta bancaria
+  // Actualizar saldo bancario según si es entrada o salida
   const { data: cuenta } = await supabase
     .from('cuentas_banco')
     .select('saldo_actual')
@@ -78,7 +82,7 @@ export async function POST(req: Request) {
     .single()
 
   if (cuenta) {
-    const nuevoSaldo = tipo === 'ingreso'
+    const nuevoSaldo = esIngreso
       ? Number(cuenta.saldo_actual) + montoNum
       : Number(cuenta.saldo_actual) - montoNum
 
