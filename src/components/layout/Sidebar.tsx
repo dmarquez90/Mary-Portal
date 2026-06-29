@@ -33,6 +33,7 @@ import {
   Lock,
   FileX,
   Calculator,
+  Banknote,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -42,7 +43,7 @@ const NAV_PRINCIPAL = [
   { href: "/dashboard",              icon: LayoutDashboard, label: "Inicio"        },
   { href: "/dashboard/ventas",       icon: FileText,        label: "Ventas"        },
   { href: "/dashboard/ventas/cobro", icon: Banknote, label: "Cobro en Caja" },
-{ href: "/dashboard/caja-bancos/arqueo", icon: Calculator, label: "Arqueo de Caja" },
+  { href: "/dashboard/caja-bancos/arqueos", icon: Calculator, label: "Arqueo de Caja" },
   { href: "/dashboard/compras",      icon: ShoppingCart,    label: "Compras"       },
   { href: "/dashboard/caja-bancos",  icon: Landmark,        label: "Caja y Bancos" },
   { href: "/dashboard/tasa-cambio", icon: DollarSign, label: "Tasa de Cambio" },
