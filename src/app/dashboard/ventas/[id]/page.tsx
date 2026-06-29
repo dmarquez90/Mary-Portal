@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Printer, FileX, Check, Package, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Printer, FileX, Check, Package, AlertTriangle, Banknote, Plus, Minus, DollarSign, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
@@ -35,6 +35,8 @@ interface Factura {
   notas?: string;
   cliente_id?: string;
   cliente_nombre?: string;
+  monto_recibido?: number;
+  cambio_entregado?: number;
   cliente?: { nombre: string; ruc?: string; cedula?: string; direccion?: string; telefono?: string } | null;
   detalles?: DetalleFactura[];
 }
@@ -71,6 +73,85 @@ export default function FacturaDetallePage() {
   const [modoAnular,  setModoAnular]  = useState<"total" | "parcial">("total");
   const [items,       setItems]       = useState<ItemAnulacion[]>([]);
   const [motivo,      setMotivo]      = useState("");
+
+  // ── Modal cobro en caja ────────────────────────────────────
+  const [showCobro,   setShowCobro]   = useState(false);
+  const [tasaHoy,     setTasaHoy]     = useState(0);
+  const [modoCobro,   setModoCobro]   = useState<"denoms" | "manual">("denoms");
+  const [montoManual, setMontoManual] = useState("");
+  const [denomsCobro, setDenomsCobro] = useState<Record<number,number>>({});
+  const [cobrando,    setCobrando]    = useState(false);
+
+  const DENOMS_LIST = [
+    {v:500,e:"C$500"},{v:200,e:"C$200"},{v:100,e:"C$100"},
+    {v:50,e:"C$50"},{v:20,e:"C$20"},{v:10,e:"C$10"},
+    {v:5,e:"C$5"},{v:1,e:"C$1"},{v:0.5,e:"C$0.50"},
+  ];
+
+  async function abrirCobro() {
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const [{ data: en }, { data: ej }] = await Promise.all([
+      supabase.from("empresas_persona_natural").select("id").eq("user_id", user.id).maybeSingle(),
+      supabase.from("empresas_juridicas").select("id").eq("user_id", user.id).maybeSingle(),
+    ]);
+    const eId = en?.id ?? ej?.id ?? "";
+    if (eId) {
+      const { data: tasas } = await supabase.from("tasa_cambio").select("tasa").eq("empresa_id", eId).order("fecha", { ascending: false }).limit(1);
+      if (tasas && tasas.length > 0) setTasaHoy(Number((tasas[0] as {tasa:number}).tasa));
+    }
+    const d: Record<number,number> = {};
+    [500,200,100,50,20,10,5,1,0.5].forEach(v => { d[v] = 0; });
+    setDenomsCobro(d);
+    setMontoManual("");
+    setModoCobro("denoms");
+    setShowCobro(true);
+  }
+
+  const totalDenoms = [500,200,100,50,20,10,5,1,0.5].reduce((s,v) => s + v * (denomsCobro[v] ?? 0), 0);
+  const montoRecibido = modoCobro === "manual"
+    ? (isNaN(Number(montoManual)) ? 0 : Number(montoManual))
+    : totalDenoms;
+  const cambioCobro = factura ? Math.max(0, montoRecibido - Number(factura.total)) : 0;
+  const faltaCobro  = factura ? Math.max(0, Number(factura.total) - montoRecibido) : 0;
+  const suficiente  = montoRecibido >= (factura ? Number(factura.total) : 0);
+
+  function calcDesglose(monto: number) {
+    let resto = Math.round(monto * 100);
+    const res: {valor: number; cant: number}[] = [];
+    for (const v of [500,200,100,50,20,10,5,1,0.5]) {
+      const vc = Math.round(v * 100);
+      const cant = Math.floor(resto / vc);
+      if (cant > 0) { res.push({valor:v, cant}); resto -= cant * vc; }
+      if (resto === 0) break;
+    }
+    return res;
+  }
+
+  const formatC = (n: number) =>
+    "C$" + n.toLocaleString("es-NI", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  async function confirmarCobro() {
+    if (!factura || !suficiente) return;
+    setCobrando(true);
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { error } = await supabase.from("facturas").update({
+      estado: "pagada",
+      monto_recibido: montoRecibido,
+      cambio_entregado: cambioCobro,
+    }).eq("id", factura.id);
+    if (error) {
+      toast.error("Error al registrar cobro: " + error.message);
+    } else {
+      toast.success("Cobro registrado — Cambio: " + formatC(cambioCobro), { duration: 5000 });
+      setShowCobro(false);
+      setFactura(prev => prev ? { ...prev, estado: "pagada", monto_recibido: montoRecibido, cambio_entregado: cambioCobro } as Factura : null);
+    }
+    setCobrando(false);
+  }
 
   useEffect(() => {
     async function load() {
@@ -376,10 +457,25 @@ export default function FacturaDetallePage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {factura.estado === "emitida" && (
-            <button onClick={abrirModalAnular}
-              className="btn-ghost text-red-500 hover:text-red-700 flex items-center gap-2 text-sm">
-              <FileX className="w-4 h-4" /> Anular / NC
-            </button>
+            <>
+              <button onClick={abrirCobro}
+                className="btn-primary flex items-center gap-2 text-sm">
+                <Banknote className="w-4 h-4" /> Cobrar
+              </button>
+              <button onClick={abrirModalAnular}
+                className="btn-ghost text-red-500 hover:text-red-700 flex items-center gap-2 text-sm">
+                <FileX className="w-4 h-4" /> Anular / NC
+              </button>
+            </>
+          )}
+          {factura.estado === "pagada" && factura.monto_recibido && (
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5 text-sm">
+              <CheckCircle2 className="w-4 h-4 text-green-600" />
+              <span className="text-green-700 font-medium">Cobrado: {formatC(Number(factura.monto_recibido))}</span>
+              {Number(factura.cambio_entregado) > 0 && (
+                <span className="text-green-500"> · Cambio: {formatC(Number(factura.cambio_entregado))}</span>
+              )}
+            </div>
           )}
           <button onClick={() => handlePrintTicket(58)} className="btn-secondary flex items-center gap-2 text-sm">
             <Printer className="w-4 h-4" /> Ticket 58mm
@@ -673,6 +769,152 @@ export default function FacturaDetallePage() {
           </div>
         </div>
       )}
+
+      {/* ── MODAL COBRO EN CAJA ──────────────────────────── */}
+      {showCobro && factura && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-display text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Banknote className="w-5 h-5 text-green-600" /> Cobro en Caja
+                </h3>
+                <p className="text-slate-400 text-xs mt-0.5">
+                  {factura.numero_factura} · Total: {formatC(Number(factura.total))}
+                </p>
+              </div>
+              {tasaHoy > 0 && (
+                <div className="flex items-center gap-1 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
+                  <DollarSign className="w-3 h-3 text-green-600" />
+                  <span className="text-xs font-semibold text-green-700">
+                    1 USD = C${tasaHoy.toFixed(4)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Toggle modo */}
+            <div className="flex gap-2 mb-4">
+              {(["denoms","manual"] as const).map(m => (
+                <button key={m} onClick={() => setModoCobro(m)}
+                  className={"flex-1 py-1.5 rounded-lg text-sm font-semibold border transition-colors " +
+                    (modoCobro === m ? "bg-brand-700 text-white border-brand-700" : "border-slate-200 text-slate-600 hover:border-brand-300")}>
+                  {m === "denoms" ? "Denominaciones" : "Monto directo"}
+                </button>
+              ))}
+            </div>
+
+            {/* Denominaciones */}
+            {modoCobro === "denoms" && (
+              <div className="space-y-1.5 mb-4 max-h-52 overflow-y-auto pr-1">
+                {DENOMS_LIST.map(({v,e}) => {
+                  const cant = denomsCobro[v] ?? 0;
+                  return (
+                    <div key={v} className="flex items-center gap-2">
+                      <span className="w-14 text-center text-xs font-bold bg-green-100 text-green-800 py-1 rounded-lg">{e}</span>
+                      <button onClick={() => setDenomsCobro(p => ({...p, [v]: Math.max(0,(p[v]??0)-1)}))}
+                        disabled={cant === 0}
+                        className="w-6 h-6 rounded-full border flex items-center justify-center text-slate-500 hover:bg-slate-100 disabled:opacity-30">
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <input type="number" min="0" value={cant}
+                        onChange={ev => setDenomsCobro(p => ({...p, [v]: Math.max(0,parseInt(ev.target.value)||0)}))}
+                        className="w-12 text-center border border-slate-200 rounded-lg py-0.5 text-sm font-mono focus:ring-2 focus:ring-brand-300 outline-none" />
+                      <button onClick={() => setDenomsCobro(p => ({...p, [v]: (p[v]??0)+1}))}
+                        className="w-6 h-6 rounded-full border flex items-center justify-center text-slate-500 hover:bg-slate-100">
+                        <Plus className="w-3 h-3" />
+                      </button>
+                      <span className={"ml-auto text-xs font-mono " + (cant > 0 ? "text-slate-700" : "text-slate-300")}>
+                        {cant > 0 ? formatC(v * cant) : "—"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Monto manual */}
+            {modoCobro === "manual" && (
+              <div className="mb-4">
+                <label className="label text-sm">Monto recibido (C$)</label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-mono font-bold">C$</span>
+                  <input type="number" step="0.01" min="0" placeholder="0.00" autoFocus
+                    value={montoManual} onChange={ev => setMontoManual(ev.target.value)}
+                    className="input pl-10 font-mono text-lg font-bold" />
+                </div>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {[factura.total, factura.total+10, factura.total+20, factura.total+50, factura.total+100]
+                    .map(v => Math.ceil(v/5)*5)
+                    .filter((v,i,a) => a.indexOf(v) === i && v >= factura.total)
+                    .slice(0, 5)
+                    .map(v => (
+                      <button key={v} onClick={() => setMontoManual(String(v))}
+                        className={"text-xs px-2.5 py-1 rounded-lg border font-mono font-semibold transition-colors " +
+                          (Number(montoManual) === v ? "bg-brand-700 text-white border-brand-700" : "border-slate-200 text-slate-600 hover:border-brand-300")}>
+                        {formatC(v)}
+                      </button>
+                    ))
+                  }
+                </div>
+              </div>
+            )}
+
+            {/* Resumen */}
+            <div className="bg-slate-50 rounded-xl p-3 mb-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Total factura</span>
+                <span className="font-mono font-bold">{formatC(Number(factura.total))}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Recibido</span>
+                <span className={"font-mono font-bold " + (montoRecibido > 0 ? "text-blue-700" : "text-slate-400")}>
+                  {montoRecibido > 0 ? formatC(montoRecibido) : "—"}
+                </span>
+              </div>
+              {faltaCobro > 0 && (
+                <div className="flex justify-between bg-red-50 rounded-lg px-2 py-1 border border-red-200">
+                  <span className="text-red-700 font-semibold">Falta</span>
+                  <span className="font-mono font-bold text-red-700">{formatC(faltaCobro)}</span>
+                </div>
+              )}
+              {suficiente && montoRecibido > 0 && (
+                <div className="flex justify-between pt-1 border-t border-green-200">
+                  <span className="text-green-700 font-bold">Cambio a dar</span>
+                  <span className="font-mono font-bold text-green-700 text-xl">{formatC(cambioCobro)}</span>
+                </div>
+              )}
+              {suficiente && cambioCobro > 0 && (
+                <div className="text-xs text-slate-500 bg-white rounded-lg p-2 border border-slate-200">
+                  <p className="font-semibold mb-1">Sugerencia de cambio:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {calcDesglose(cambioCobro).map(({valor,cant}) => (
+                      <span key={valor} className="bg-slate-100 px-1.5 py-0.5 rounded font-mono">
+                        C${valor} x{cant}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Botones */}
+            <div className="flex gap-3">
+              <button onClick={confirmarCobro} disabled={!suficiente || cobrando}
+                className={"flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all " +
+                  (suficiente ? "bg-green-600 hover:bg-green-700 text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed")}>
+                {cobrando
+                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <CheckCircle2 className="w-4 h-4" />
+                }
+                {suficiente ? "Confirmar cobro" : ("Falta " + formatC(faltaCobro))}
+              </button>
+              <button onClick={() => setShowCobro(false)} className="btn-secondary px-4">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   );
 }
