@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       .in("empresa_id", ids)
       .gte("fecha_emision", firstDay)
       .lte("fecha_emision", lastDay)
-      .eq("estado", "emitida")
+      .in("estado", ["emitida", "pagada"])
       .order("fecha_emision");
 
     const ventas = (facturas ?? []).map((f) => ({
@@ -74,14 +74,15 @@ export async function GET(request: NextRequest) {
       .order("fecha_compra");
 
     const compras = (comprasData ?? []).map((c) => ({
-      numero_compra:     c.numero_compra,
-      fecha_compra:      c.fecha_compra,
-      proveedor_nombre:  (c.proveedor as { nombre?: string } | null)?.nombre ?? "",
-      proveedor_ruc:     (c.proveedor as { ruc?: string } | null)?.ruc ?? "",
-      subtotal:          Number(c.subtotal),
-      iva_total:         Number(c.iva_total),
-      total:             Number(c.total),
-      tipo_proveedor:    (c.proveedor as { tipo_persona?: string } | null)?.tipo_persona ?? "juridica",
+      numero_compra:            c.numero_compra,
+      numero_factura_proveedor: c.numero_factura_proveedor ?? null,
+      fecha_compra:             c.fecha_compra,
+      proveedor_nombre:         (c.proveedor as { nombre?: string } | null)?.nombre ?? "",
+      proveedor_ruc:            (c.proveedor as { ruc?: string } | null)?.ruc ?? "",
+      subtotal:                 Number(c.subtotal),
+      iva_total:                Number(c.iva_total),
+      total:                    Number(c.total),
+      tipo_proveedor:           (c.proveedor as { tipo_persona?: string } | null)?.tipo_persona ?? "juridica",
     }));
 
     return NextResponse.json({ compras, empresa, mes, anio });

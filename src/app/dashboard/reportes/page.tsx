@@ -15,7 +15,7 @@ interface MesData {
 }
 
 interface VentaRow { numero_factura: string; fecha_emision: string; cliente_nombre: string; cliente_ruc: string; subtotal: number; iva_total: number; total: number; }
-interface CompraRow { numero_compra: string; fecha_compra: string; proveedor_nombre: string; proveedor_ruc: string; subtotal: number; iva_total: number; total: number; tipo_proveedor: string; }
+interface CompraRow { numero_compra: string; numero_factura_proveedor?: string | null; fecha_compra: string; proveedor_nombre: string; proveedor_ruc: string; subtotal: number; iva_total: number; total: number; tipo_proveedor: string; }
 interface DatosReporte { ventas?: VentaRow[]; compras?: CompraRow[]; empresa: { nombre: string; ruc: string }; mes: number; anio: number; }
 
 /* ─── estilos xlsx-js-style ──────────────────────────────── */
@@ -121,7 +121,7 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
                       <tr key={i} className={i % 2 === 0 ? "bg-purple-50" : "bg-white"}>
                         <td className="px-3 py-1.5 font-mono">{c.proveedor_ruc}</td>
                         <td className="px-3 py-1.5 max-w-[160px] truncate">{c.proveedor_nombre}</td>
-                        <td className="px-3 py-1.5 font-mono">{c.numero_compra}</td>
+                        <td className="px-3 py-1.5 font-mono">{c.numero_factura_proveedor ?? c.numero_compra}</td>
                         <td className="px-3 py-1.5">{fecha}</td>
                         <td className="px-3 py-1.5 text-right">{formatCurrency(c.subtotal)}</td>
                         <td className="px-3 py-1.5 text-right text-purple-700">{formatCurrency(c.iva_total)}</td>
@@ -165,7 +165,7 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
                       <tr key={i} className={i % 2 === 0 ? "bg-amber-50" : "bg-white"}>
                         <td className="px-3 py-1.5 font-mono">{c.proveedor_ruc}</td>
                         <td className="px-3 py-1.5 max-w-[160px] truncate">{c.proveedor_nombre}</td>
-                        <td className="px-3 py-1.5 font-mono">{c.numero_compra}</td>
+                        <td className="px-3 py-1.5 font-mono">{c.numero_factura_proveedor ?? c.numero_compra}</td>
                         <td className="px-3 py-1.5">{fecha}</td>
                         <td className="px-3 py-1.5 text-right">{formatCurrency(c.subtotal)}</td>
                         <td className="px-3 py-1.5 text-right text-amber-700 font-medium">{formatCurrency(ir)}</td>
@@ -249,7 +249,7 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
                     return (
                       <tr key={i} className={i % 2 === 0 ? "bg-teal-50" : "bg-white"}>
                         <td className="px-3 py-1.5">{fecha}</td>
-                        <td className="px-3 py-1.5 font-mono">{c.numero_compra}</td>
+                        <td className="px-3 py-1.5 font-mono">{c.numero_factura_proveedor ?? c.numero_compra}</td>
                         <td className="px-3 py-1.5 max-w-[140px] truncate">{c.proveedor_nombre}</td>
                         <td className="px-3 py-1.5 font-mono text-xs">{c.proveedor_ruc}</td>
                         <td className="px-3 py-1.5 text-right">{formatCurrency(c.subtotal)}</td>
@@ -313,7 +313,7 @@ export default function ReportesPage() {
         if (!ids.length) return Promise.resolve({ mes, anio, ventas:0, ivaVentas:0, compras:0, ivaCompras:0, totalFacturas:0, totalCompras:0 });
 
         return Promise.all([
-          supabase.from("facturas").select("total, iva_total").in("empresa_id", ids).gte("fecha_emision", firstDay).lte("fecha_emision", lastDay).eq("estado","emitida"),
+          supabase.from("facturas").select("total, iva_total").in("empresa_id", ids).gte("fecha_emision", firstDay).lte("fecha_emision", lastDay).in("estado",["emitida","pagada"]),
           supabase.from("compras").select("total, iva_total").in("empresa_id", ids).gte("fecha_compra", firstDay).lte("fecha_compra", lastDay).eq("estado","recibida"),
         ]).then(([{ data: fac }, { data: com }]) => ({
           mes, anio,
@@ -445,7 +445,7 @@ export default function ReportesPage() {
         const rows = compras.map(c => {
           const fp = c.fecha_compra?.split("-") ?? [];
           const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0].slice(2)}` : c.fecha_compra;
-          return [c.proveedor_ruc, c.proveedor_nombre, c.numero_compra, "Compra de bienes y servicios", fecha, c.subtotal, c.iva_total, "105"];
+          return [c.proveedor_ruc, c.proveedor_nombre, c.numero_factura_proveedor ?? c.numero_compra, "Compra de bienes y servicios", fecha, c.subtotal, c.iva_total, "105"];
         });
         const totalRow = ["", "TOTAL", "", "", "", compras.reduce((s,c)=>s+c.subtotal,0), compras.reduce((s,c)=>s+c.iva_total,0), ""];
         const ws2 = XLSX.utils.aoa_to_sheet([headers, ...rows, totalRow]);
@@ -459,7 +459,7 @@ export default function ReportesPage() {
         const rows = compras.filter(c => c.tipo_proveedor === "natural").map(c => {
           const fp = c.fecha_compra?.split("-") ?? [];
           const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0].slice(2)}` : c.fecha_compra;
-          return [c.proveedor_ruc, c.proveedor_nombre, c.subtotal, 0, 0, c.numero_compra, fecha, c.subtotal, +(c.subtotal * 0.02).toFixed(2), "2%", "22"];
+          return [c.proveedor_ruc, c.proveedor_nombre, c.subtotal, 0, 0, c.numero_factura_proveedor ?? c.numero_compra, fecha, c.subtotal, +(c.subtotal * 0.02).toFixed(2), "2%", "22"];
         });
         const ws3 = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         ws3["!cols"] = [{ wch: 18 },{ wch: 35 },{ wch: 18 },{ wch: 18 },{ wch: 18 },{ wch: 20 },{ wch: 15 },{ wch: 15 },{ wch: 15 },{ wch: 12 },{ wch: 12 }];
@@ -492,7 +492,7 @@ export default function ReportesPage() {
           const fp = c.fecha_compra?.split("-") ?? [];
           const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
           const ir = c.tipo_proveedor === "natural" ? +(c.subtotal * 0.02).toFixed(2) : 0;
-          return [fecha, c.numero_compra, c.proveedor_nombre, c.proveedor_ruc, c.subtotal, c.iva_total, c.total, ir, c.tipo_proveedor === "natural" ? "Natural" : "Jurídica"];
+          return [fecha, c.numero_factura_proveedor ?? c.numero_compra, c.proveedor_nombre, c.proveedor_ruc, c.subtotal, c.iva_total, c.total, ir, c.tipo_proveedor === "natural" ? "Natural" : "Jurídica"];
         });
         const totalRow = ["", "", "", "TOTAL", compras.reduce((s,c)=>s+c.subtotal,0), compras.reduce((s,c)=>s+c.iva_total,0), compras.reduce((s,c)=>s+c.total,0), compras.filter(c=>c.tipo_proveedor==="natural").reduce((s,c)=>s+(c.subtotal*0.02),0), ""];
         const ws5 = XLSX.utils.aoa_to_sheet([titleRow, subtitleRow, headers, ...rows, totalRow]);

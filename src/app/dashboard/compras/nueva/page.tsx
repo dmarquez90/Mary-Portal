@@ -249,7 +249,8 @@ export default function NuevaCompraPage() {
       total_a_pagar:  totalPagar,
       cuenta_banco_id: cuentaBancoFinal,
       cuenta_caja_id:  cuentaCajaFinal,
-      notas: [notas, numFacturaProveedor ? `Factura proveedor: ${numFacturaProveedor}` : ""].filter(Boolean).join(" | ") || null,
+      notas: notas || null,
+      numero_factura_proveedor: numFacturaProveedor || null,
     }).select().single();
 
     if (error || !compra) { toast.error(`Error al guardar: ${error?.message}`); setSaving(false); return; }

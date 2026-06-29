@@ -12,7 +12,7 @@ const BADGE: Record<string, string> = {
 };
 
 interface Compra {
-  id: string; numero_compra: string; fecha_compra: string;
+  id: string; numero_compra: string; numero_factura_proveedor?: string | null; fecha_compra: string;
   iva_total: number; total: number; estado: string;
   proveedor: { nombre: string } | null;
 }
@@ -53,7 +53,7 @@ export default function ComprasPage() {
     const [{ data: comps }, { data: tasas }] = await Promise.all([
       supabase
         .from("compras")
-        .select("id, numero_compra, fecha_compra, iva_total, total, estado, proveedor:proveedores(nombre)")
+        .select("id, numero_compra, numero_factura_proveedor, fecha_compra, iva_total, total, estado, proveedor:proveedores(nombre)")
         .in("empresa_id", ids.length ? ids : ["none"])
         .order("created_at", { ascending: false })
         .limit(500),
@@ -78,7 +78,7 @@ export default function ComprasPage() {
   const comprasFiltradas = useMemo(() => {
     return compras.filter(c => {
       const proveedor = c.proveedor?.nombre ?? "";
-      if (filtroNumero    && !c.numero_compra.toLowerCase().includes(filtroNumero.toLowerCase())) return false;
+      if (filtroNumero && !c.numero_compra.toLowerCase().includes(filtroNumero.toLowerCase()) && !(c.numero_factura_proveedor ?? "").toLowerCase().includes(filtroNumero.toLowerCase())) return false;
       if (filtroProveedor && !proveedor.toLowerCase().includes(filtroProveedor.toLowerCase())) return false;
       if (filtroEstado    && c.estado !== filtroEstado) return false;
       if (filtroDesde     && c.fecha_compra < filtroDesde) return false;
@@ -255,7 +255,8 @@ export default function ComprasPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="table-header">N° Compra</th>
+                  <th className="table-header">N° Factura Proveedor</th>
+                  <th className="table-header">N° Interno</th>
                   <th className="table-header">Proveedor</th>
                   <th className="table-header">Fecha</th>
                   <th className="table-header">IVA</th>
@@ -267,7 +268,10 @@ export default function ComprasPage() {
               <tbody>
                 {comprasFiltradas.map(c => (
                   <tr key={c.id} className={`hover:bg-slate-50 transition-colors ${c.estado === "anulada" ? "opacity-50" : ""}`}>
-                    <td className="table-cell font-mono font-medium text-purple-700">{c.numero_compra}</td>
+                    <td className="table-cell font-mono font-medium text-slate-900">
+                      {c.numero_factura_proveedor ?? <span className="text-slate-400 text-xs italic">Sin N° factura</span>}
+                    </td>
+                    <td className="table-cell font-mono text-xs text-purple-600">{c.numero_compra}</td>
                     <td className="table-cell">{c.proveedor?.nombre ?? "—"}</td>
                     <td className="table-cell">{formatDate(c.fecha_compra)}</td>
                     <td className="table-cell">{formatCurrency(c.iva_total)}</td>
