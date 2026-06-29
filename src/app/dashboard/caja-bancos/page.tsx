@@ -627,7 +627,7 @@ export default function CajaBancosPage() {
                       <td className="px-4 py-2.5 text-gray-700">{c.beneficiario || '—'}</td>
                       <td className="px-4 py-2.5 text-gray-500">{fmtFecha(c.fecha_emision)}</td>
                       <td className="px-4 py-2.5 text-gray-500">{c.fecha_vencimiento ? fmtFecha(c.fecha_vencimiento) : '—'}</td>
-                      <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{fmt(c.monto, c.cuentas_banco?.moneda ?? 'NIO')}
+                      <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{fmt(c.monto, c.cuentas_banco?.moneda ?? 'NIO')}</td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${TIPO_BADGE[c.estado] || 'bg-gray-100 text-gray-600'}`}>{c.estado}</span>
                       </td>
