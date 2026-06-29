@@ -43,9 +43,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     })
   }
 
+  // Limpiar campos que no existen en la tabla 'empleados'
+  const { motivo_cambio_salario, empresa_id: _eid, ...camposEmpleado } = body
+
   const { data, error } = await supabase
     .from('empleados')
-    .update({ ...body, updated_at: new Date().toISOString() })
+    .update({ ...camposEmpleado, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select()
     .single()

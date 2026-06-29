@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Save, UserX, UserCheck, History } from 'lucide-react'
+import ComboCargo from '@/components/nomina/ComboCargo'
 
 interface Cargo { id: string; nombre: string; departamento?: string }
 
@@ -28,7 +29,6 @@ export default function EditarEmpleadoPage() {
   const id       = params.id as string
 
   const [empresaId, setEmpresaId]   = useState<string | null>(null)
-  const [cargos, setCargos]         = useState<Cargo[]>([])
   const [historial, setHistorial]   = useState<HistorialSalario[]>([])
   const [loading, setLoading]       = useState(true)
   const [guardando, setGuardando]   = useState(false)
@@ -60,6 +60,7 @@ export default function EditarEmpleadoPage() {
   })
 
   const [salarioOriginal, setSalarioOriginal] = useState<number>(0)
+  const [cargoNombre, setCargoNombre] = useState('')
 
   // Obtener empresa_id
   useEffect(() => {
@@ -72,11 +73,7 @@ export default function EditarEmpleadoPage() {
       ]).then(([n, j]) => {
         const eid = (n.data || j.data)?.id || null
         setEmpresaId(eid)
-        if (eid) {
-          fetch(`/api/nomina/cargos?empresa_id=${eid}`)
-            .then(r => r.json())
-            .then(d => setCargos(Array.isArray(d) ? d : []))
-        }
+
       })
     })
   }, [])
@@ -113,6 +110,7 @@ export default function EditarEmpleadoPage() {
           estado:           d.estado           || 'activo',
           motivo_cambio_salario: '',
         })
+        if (d.cargo?.nombre) setCargoNombre(d.cargo.nombre)
         setLoading(false)
       })
       .catch(() => {
@@ -377,13 +375,14 @@ export default function EditarEmpleadoPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-                <select value={form.cargo_id} onChange={e => set('cargo_id', e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm">
-                  <option value="">— Sin cargo —</option>
-                  {cargos.map(c => (
-                    <option key={c.id} value={c.id}>{c.nombre}</option>
-                  ))}
-                </select>
+                {empresaId && (
+                  <ComboCargo
+                    empresaId={empresaId}
+                    value={form.cargo_id}
+                    inputValue={cargoNombre}
+                    onChange={(id, nombre) => { set('cargo_id', id); setCargoNombre(nombre) }}
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Departamento</label>

@@ -209,5 +209,27 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Crear asiento contable de planilla (devengado) ──────────
+  try {
+    await crearAsientoPlanilla(supabase, empresa_id, {
+      id:                       planilla.id,
+      periodo_mes,
+      periodo_anio,
+      fecha_pago,
+      total_salarios_brutos:    totales.total_salarios_brutos,
+      total_inss_laboral:       totales.total_inss_laboral,
+      total_inss_patronal:      totales.total_inss_patronal,
+      total_inatec:             totales.total_inatec,
+      total_ir_laboral:         totales.total_ir_laboral,
+      total_neto_pagar:         totales.total_neto_pagar,
+      total_prov_vacaciones:    totales.total_prov_vacaciones,
+      total_prov_aguinaldo:     totales.total_prov_aguinaldo,
+      total_prov_indemnizacion: totales.total_prov_indemnizacion,
+    })
+  } catch (e) {
+    // Asiento fallido no revierte la planilla — se puede regenerar manualmente
+    console.error('Error generando asiento contable de planilla:', e)
+  }
+
   return NextResponse.json({ planilla, detalles: detallesCalculados }, { status: 201 })
 }
