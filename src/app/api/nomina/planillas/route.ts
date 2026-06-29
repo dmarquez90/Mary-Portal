@@ -173,26 +173,39 @@ export async function POST(req: NextRequest) {
       acum_anual_bruto:  d.base_anual_ir,
     }, { onConflict: 'empresa_id,empleado_id,anio_fiscal,mes' })
 
-    // Prestaciones
+    // Prestaciones: fetch → update si existe, insert si es nuevo empleado
     const { data: prest } = await supabase
       .from('prestaciones_sociales')
-      .select('*')
+      .select('acum_vacaciones, acum_aguinaldo, acum_indemnizacion, dias_vacaciones_acum')
       .eq('empresa_id', empresa_id)
       .eq('empleado_id', d.empleado_id)
-      .single()
+      .maybeSingle()
 
     if (prest) {
       await supabase.from('prestaciones_sociales').update({
-        acum_vacaciones:   prest.acum_vacaciones + d.prov_vacaciones,
-        acum_aguinaldo:    prest.acum_aguinaldo + d.prov_aguinaldo,
-        acum_indemnizacion: prest.acum_indemnizacion + d.prov_indemnizacion,
-        dias_vacaciones_acum: prest.dias_vacaciones_acum + (d.dias_trabajados / 30),
-        ultimo_periodo_mes:  periodo_mes,
-        ultimo_periodo_anio: periodo_anio,
-        updated_at: new Date().toISOString(),
+        acum_vacaciones:      Number(prest.acum_vacaciones)    + d.prov_vacaciones,
+        acum_aguinaldo:       Number(prest.acum_aguinaldo)     + d.prov_aguinaldo,
+        acum_indemnizacion:   Number(prest.acum_indemnizacion) + d.prov_indemnizacion,
+        dias_vacaciones_acum: Number(prest.dias_vacaciones_acum) + (d.dias_trabajados / 30),
+        ultimo_periodo_mes:   periodo_mes,
+        ultimo_periodo_anio:  periodo_anio,
+        updated_at:           new Date().toISOString(),
       })
       .eq('empresa_id', empresa_id)
       .eq('empleado_id', d.empleado_id)
+    } else {
+      // Primer mes procesado para este empleado: crear registro inicial
+      await supabase.from('prestaciones_sociales').insert({
+        empresa_id,
+        empleado_id:          d.empleado_id,
+        acum_vacaciones:      d.prov_vacaciones,
+        acum_aguinaldo:       d.prov_aguinaldo,
+        acum_indemnizacion:   d.prov_indemnizacion,
+        dias_vacaciones_acum: d.dias_trabajados / 30,
+        dias_vacaciones_gozadas: 0,
+        ultimo_periodo_mes:   periodo_mes,
+        ultimo_periodo_anio:  periodo_anio,
+      })
     }
   }
 

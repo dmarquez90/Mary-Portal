@@ -40,6 +40,10 @@ interface FilaPlanilla {
   prov_vacaciones?: number
   prov_aguinaldo?:  number
   prov_indemnizacion?: number
+  // acumulados IR (se llenan al calcular, se envían al POST)
+  acum_bruto_anteriores?: number
+  acum_inss_anteriores?:  number
+  acum_ir_anteriores?:    number
 }
 
 const fmt = (n?: number) => n !== undefined
@@ -98,8 +102,31 @@ export default function NuevaPlanillaPage() {
       })
   }, [empresaId])
 
-  function calcular() {
+  async function calcular() {
+    if (!empresaId) return
+    const supabase = createClient()
+
+    // Traer acumulados IR reales de meses anteriores al período seleccionado
+    const { data: acums } = await supabase
+      .from('ir_laboral_acumulado')
+      .select('empleado_id, salario_bruto, inss_laboral, ir_retenido, mes')
+      .eq('empresa_id', empresaId)
+      .eq('anio_fiscal', periodo.anio)
+      .lt('mes', periodo.mes)
+
+    // Sumar acumulados por empleado (meses 1..periodo.mes-1)
+    const acumMap: Record<string, { acumBruto: number; acumINSS: number; acumIR: number }> = {}
+    for (const row of acums ?? []) {
+      if (!acumMap[row.empleado_id]) {
+        acumMap[row.empleado_id] = { acumBruto: 0, acumINSS: 0, acumIR: 0 }
+      }
+      acumMap[row.empleado_id].acumBruto += Number(row.salario_bruto)
+      acumMap[row.empleado_id].acumINSS  += Number(row.inss_laboral)
+      acumMap[row.empleado_id].acumIR    += Number(row.ir_retenido)
+    }
+
     const filasCalc = filas.map(f => {
+      const ac = acumMap[f.empleado_id] ?? { acumBruto: 0, acumINSS: 0, acumIR: 0 }
       const r = calcularEmpleadoPlanilla({
         empleadoId:          f.empleado_id,
         salarioBase:         f.salario_base,
@@ -113,21 +140,24 @@ export default function NuevaPlanillaPage() {
         otrosDescuentos:     f.otros_descuentos,
         regimenInss:         f.regimen_inss as any,
         mesActual:           periodo.mes,
-        acumBrutoAnteriores: 0,
-        acumINSSAnteriores:  0,
-        acumIRAnteriores:    0,
+        acumBrutoAnteriores: ac.acumBruto,
+        acumINSSAnteriores:  ac.acumINSS,
+        acumIRAnteriores:    ac.acumIR,
       })
       return {
         ...f,
-        salario_bruto:      r.salarioBruto,
-        inss_laboral:       r.inssLaboral,
-        inss_patronal:      r.inssPatronal,
-        inatec:             r.inatec,
-        ir_laboral:         r.irLaboral,
-        neto_pagar:         r.netoPagar,
-        prov_vacaciones:    r.provVacaciones,
-        prov_aguinaldo:     r.provAguinaldo,
-        prov_indemnizacion: r.provIndemnizacion,
+        acum_bruto_anteriores: ac.acumBruto,
+        acum_inss_anteriores:  ac.acumINSS,
+        acum_ir_anteriores:    ac.acumIR,
+        salario_bruto:         r.salarioBruto,
+        inss_laboral:          r.inssLaboral,
+        inss_patronal:         r.inssPatronal,
+        inatec:                r.inatec,
+        ir_laboral:            r.irLaboral,
+        neto_pagar:            r.netoPagar,
+        prov_vacaciones:       r.provVacaciones,
+        prov_aguinaldo:        r.provAguinaldo,
+        prov_indemnizacion:    r.provIndemnizacion,
       }
     })
     setFilas(filasCalc)
