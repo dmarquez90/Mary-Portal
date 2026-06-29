@@ -41,8 +41,11 @@ import { toast } from "sonner";
 const NAV_PRINCIPAL = [
   { href: "/dashboard",              icon: LayoutDashboard, label: "Inicio"        },
   { href: "/dashboard/ventas",       icon: FileText,        label: "Ventas"        },
+  { href: "/dashboard/ventas/cobro", icon: Banknote, label: "Cobro en Caja" },
+{ href: "/dashboard/caja-bancos/arqueo", icon: Calculator, label: "Arqueo de Caja" },
   { href: "/dashboard/compras",      icon: ShoppingCart,    label: "Compras"       },
   { href: "/dashboard/caja-bancos",  icon: Landmark,        label: "Caja y Bancos" },
+  { href: "/dashboard/tasa-cambio", icon: DollarSign, label: "Tasa de Cambio" },
   { href: "/dashboard/clientes",     icon: Users,           label: "Clientes"      },
   { href: "/dashboard/proveedores",  icon: Truck,           label: "Proveedores"   },
   { href: "/dashboard/inventario",   icon: Package,         label: "Inventario"    },
