@@ -28,7 +28,7 @@ const PROD_FORM_VACIO = {
 export default function EditarCompraPage() {
   const router = useRouter();
   const params = useParams();
-  const compraId = params.id as string;
+  const compraId = Array.isArray(params.id) ? params.id[0] : (params.id ?? "");
 
   const [saving,      setSaving]     = useState(false);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -275,7 +275,7 @@ export default function EditarCompraPage() {
       lineas.map(l => {
         const { sub, iva, total: tot } = calcLinea(l);
         return {
-          compra_id: compra.id,
+          compra_id: compraId,
           producto_id: l.producto_id || null,
           descripcion: l.descripcion,
           cantidad: l.cantidad,

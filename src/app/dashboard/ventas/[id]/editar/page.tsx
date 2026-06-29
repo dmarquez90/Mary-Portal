@@ -24,7 +24,7 @@ interface CuentaCaja  { id: string; nombre: string; tipo: string; }
 export default function EditarFacturaPage() {
   const router = useRouter();
   const params = useParams();
-  const facturaId = params.id as string;
+  const facturaId = Array.isArray(params.id) ? params.id[0] : (params.id ?? "");
 
   const [saving,    setSaving]    = useState(false);
   const [clientes,  setClientes]  = useState<Cliente[]>([]);
@@ -194,14 +194,14 @@ export default function EditarFacturaPage() {
       cuenta_caja_id:    cuentaCajaFinal,
     }).eq("id", facturaId).select().single();
 
-    // Borrar detalles anteriores y reinsertar
-    await supabase.from("detalle_facturas").delete().eq("factura_id", facturaId);
-
     if (error || !factura) {
       toast.error(`Error al guardar: ${error?.message}`);
       setSaving(false);
       return;
     }
+
+    // Borrar detalles anteriores y reinsertar
+    await supabase.from("detalle_facturas").delete().eq("factura_id", facturaId);
 
     // ── Insertar líneas de detalle (solo las que tienen descripción) ──
     // El trigger BEFORE INSERT en detalle_facturas valida stock.
@@ -212,7 +212,7 @@ export default function EditarFacturaPage() {
       lineasValidas.map(l => {
         const { sub, iva, total: tot } = calcLinea(l);
         return {
-          factura_id:      factura.id,
+          factura_id:      facturaId,
           producto_id:     l.producto_id || null,
           descripcion:     l.descripcion.trim(),
           cantidad:        l.cantidad,

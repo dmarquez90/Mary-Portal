@@ -177,7 +177,7 @@ export default function CajaBancosPage() {
   // Carga inicial: resumen + bancos + cajas en paralelo (sin esperar cambio de tab)
   useEffect(() => {
     // Siempre cargar resumen, bancos y cajas para que el resumen inicial tenga datos
-    Promise.all([cargarResumen(), cargarBancos(), cargarCajas()])
+    void Promise.all([cargarResumen(), cargarBancos(), cargarCajas()])
     // Cargar datos específicos según tab activa
     if (tab === 'caja') cargarMovCaja()
     else if (tab === 'transacciones') cargarTx()
