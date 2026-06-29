@@ -174,12 +174,14 @@ export default function CajaBancosPage() {
     setLoading(false)
   }, [])
 
+  // Carga inicial: resumen + bancos + cajas en paralelo (sin esperar cambio de tab)
   useEffect(() => {
-    cargarResumen()
-    if (tab === 'bancos') cargarBancos()
-    else if (tab === 'caja') { cargarCajas(); cargarMovCaja() }
-    else if (tab === 'transacciones') { cargarTx(); cargarBancos() }
-    else if (tab === 'cheques') { cargarCheques(); cargarBancos() }
+    // Siempre cargar resumen, bancos y cajas para que el resumen inicial tenga datos
+    Promise.all([cargarResumen(), cargarBancos(), cargarCajas()])
+    // Cargar datos específicos según tab activa
+    if (tab === 'caja') cargarMovCaja()
+    else if (tab === 'transacciones') cargarTx()
+    else if (tab === 'cheques') { cargarCheques() }
   }, [tab])
 
   // ── Guardar cuenta bancaria ───────────────────────────────

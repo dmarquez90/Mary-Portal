@@ -283,6 +283,12 @@ export default function ComprasPage() {
                           className="text-purple-700 hover:text-purple-900 flex items-center gap-1 text-sm font-medium">
                           <Eye className="w-4 h-4" /> Ver
                         </Link>
+                        {c.estado === "borrador" && (
+                          <Link href={`/dashboard/compras/${c.id}/editar`}
+                            className="text-amber-600 hover:text-amber-800 flex items-center gap-1 text-sm font-medium">
+                            ✏️ Editar
+                          </Link>
+                        )}
                         {c.estado !== "anulada" && (
                           <button
                             onClick={() => setConfirmDel(c)}
