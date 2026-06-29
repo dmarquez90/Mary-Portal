@@ -1,31 +1,29 @@
-\'use client\'
+'use client'
 /**
  * ComboCargo — campo de cargo con búsqueda + creación al vuelo
  * Muestra los cargos existentes de la empresa y permite escribir uno nuevo.
  * Si el texto no coincide con ningún cargo existente, ofrece "Crear cargo X".
  */
-import { useEffect, useRef, useState } from \'react\'
+import { useEffect, useRef, useState } from 'react'
 
 interface Cargo { id: string; nombre: string; departamento?: string }
 
 interface Props {
   empresaId:  string
-  value:      string          // cargo_id seleccionado (o '' si es nuevo/no seleccionado)
-  inputValue: string          // texto visible en el input
+  value:      string
+  inputValue: string
   onChange:   (cargoId: string, nombreCargo: string) => void
 }
 
 export default function ComboCargo({ empresaId, value, inputValue, onChange }: Props) {
-  const [cargos, setCargos]       = useState<Cargo[]>([])
-  const [abierto, setAbierto]     = useState(false)
-  const [texto, setTexto]         = useState(inputValue)
-  const [creando, setCreando]     = useState(false)
+  const [cargos, setCargos]   = useState<Cargo[]>([])
+  const [abierto, setAbierto] = useState(false)
+  const [texto, setTexto]     = useState(inputValue)
+  const [creando, setCreando] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  // Sincronizar texto externo
   useEffect(() => { setTexto(inputValue) }, [inputValue])
 
-  // Cargar cargos de la empresa
   useEffect(() => {
     if (!empresaId) return
     fetch(`/api/nomina/cargos?empresa_id=${empresaId}`)
@@ -33,31 +31,31 @@ export default function ComboCargo({ empresaId, value, inputValue, onChange }: P
       .then(d => setCargos(Array.isArray(d) ? d : []))
   }, [empresaId])
 
-  // Cerrar al hacer clic fuera
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setAbierto(false)
       }
     }
-    document.addEventListener(\'mousedown\', handler)
-    return () => document.removeEventListener(\'mousedown\', handler)
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
   }, [])
 
   const filtrados = cargos.filter(c =>
     c.nombre.toLowerCase().includes(texto.toLowerCase())
   )
 
-  const mostrarCrear = texto.trim().length > 0 &&
+  const mostrarCrear =
+    texto.trim().length > 0 &&
     !cargos.some(c => c.nombre.toLowerCase() === texto.trim().toLowerCase())
 
   async function crearCargo() {
     if (!texto.trim() || !empresaId) return
     setCreando(true)
     try {
-      const res = await fetch(\'/api/nomina/cargos\', {
-        method: \'POST\',
-        headers: { \'Content-Type\': \'application/json\' },
+      const res = await fetch('/api/nomina/cargos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ empresa_id: empresaId, nombre: texto.trim(), activo: true }),
       })
       if (res.ok) {
@@ -77,7 +75,11 @@ export default function ComboCargo({ empresaId, value, inputValue, onChange }: P
       <input
         type="text"
         value={texto}
-        onChange={e => { setTexto(e.target.value); setAbierto(true); onChange(\'\', e.target.value) }}
+        onChange={e => {
+          setTexto(e.target.value)
+          setAbierto(true)
+          onChange('', e.target.value)
+        }}
         onFocus={() => setAbierto(true)}
         placeholder="Buscar o escribir cargo…"
         className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -90,7 +92,7 @@ export default function ComboCargo({ empresaId, value, inputValue, onChange }: P
                 type="button"
                 onClick={() => { onChange(c.id, c.nombre); setTexto(c.nombre); setAbierto(false) }}
                 className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between ${
-                  value === c.id ? \'bg-blue-50 font-medium text-blue-700\' : \'text-gray-700\'
+                  value === c.id ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-700'
                 }`}
               >
                 <span>{c.nombre}</span>
@@ -109,7 +111,7 @@ export default function ComboCargo({ empresaId, value, inputValue, onChange }: P
                 className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-2 font-medium disabled:opacity-50"
               >
                 <span className="text-base leading-none">+</span>
-                {creando ? \'Creando…\' : `Crear cargo "${texto.trim()}"`}
+                {creando ? 'Creando…' : `Crear cargo "${texto.trim()}"`}
               </button>
             </li>
           )}
