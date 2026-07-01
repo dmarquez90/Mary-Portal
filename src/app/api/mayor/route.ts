@@ -82,7 +82,20 @@ export async function GET(request: Request) {
       }
     }
 
-    let movQuery = supabase
+    // Filtramos por la fecha real del asiento (columna `fecha`), no por las
+    // columnas redundantes periodo_anio/periodo_mes: estas se calculan una
+    // sola vez al insertar y pueden quedar desincronizadas de `fecha` (p.ej.
+    // por un bug de zona horaria al calcularlas), lo que hacía que un asiento
+    // de marzo apareciera dentro del Mayor de febrero. `fecha` es la única
+    // fuente de verdad para decidir a qué período pertenece un movimiento.
+    const mesInicio = mes ?? 1
+    const mesFin = mes ?? 12
+    const fechaInicio = `${anio}-${String(mesInicio).padStart(2, '0')}-01`
+    const anioFinExcl = mesFin === 12 ? anio + 1 : anio
+    const mesFinExcl = mesFin === 12 ? 1 : mesFin + 1
+    const fechaFinExclusiva = `${anioFinExcl}-${String(mesFinExcl).padStart(2, '0')}-01`
+
+    const movQuery = supabase
       .from('asientos_detalle')
       .select(`
         id, debe, haber, descripcion, orden,
@@ -92,11 +105,13 @@ export async function GET(request: Request) {
       `)
       .eq('cuenta_id', cuenta_id)
       .eq('asientos_contables.empresa_id', empresaId)
-      .eq('asientos_contables.estado', 'contabilizado')
-      .eq('asientos_contables.periodo_anio', anio)
+      // Los asientos generados automáticamente por ventas/compras quedan en
+      // estado 'aprobado' (no 'contabilizado'); solo excluimos los anulados.
+      .neq('asientos_contables.estado', 'anulado')
+      .gte('asientos_contables.fecha', fechaInicio)
+      .lt('asientos_contables.fecha', fechaFinExclusiva)
+      .order('fecha', { referencedTable: 'asientos_contables', ascending: true })
       .order('orden', { ascending: true })
-
-    if (mes) movQuery = movQuery.eq('asientos_contables.periodo_mes', mes)
 
     const { data: movimientos, error } = await movQuery
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -109,71 +124,34 @@ export async function GET(request: Request) {
   }
 
   // ── BALANCE DE COMPROBACIÓN ─────────────────────────────────
+  // Se calcula en vivo desde asientos_detalle/asientos_contables vía la
+  // función get_libro_mayor(), en vez de la tabla saldos_mayor (que no se
+  // llena automáticamente y por eso siempre aparecía vacía).
   if (tipo === 'balance') {
-    let periodoQuery = supabase
-      .from('periodos_contables')
-      .select('id')
-      .eq('empresa_id', empresaId)
-      .eq('anio', anio)
-
-    if (mes) periodoQuery = periodoQuery.eq('mes', mes)
-
-    const { data: periodos } = await periodoQuery
-    const idsPeriodos = (periodos ?? []).map((p: any) => p.id)
-
-    if (idsPeriodos.length === 0) {
-      return NextResponse.json({
-        cuentas: [],
-        totales: { debe: 0, haber: 0, cuadrado: true },
-      })
-    }
-
-    const { data: saldos, error } = await supabase
-      .from('saldos_mayor')
-      .select(`
-        cuenta_id, saldo_debe, saldo_haber, saldo_neto,
-        plan_cuentas!inner(codigo, nombre, tipo, naturaleza, nivel)
-      `)
-      .eq('empresa_id', empresaId)
-      .in('periodo_id', idsPeriodos)
+    const { data: filas, error } = await supabase.rpc('get_libro_mayor', {
+      p_empresa_id: empresaId,
+      p_anio: anio,
+      p_mes_inicio: mes ?? 1,
+      p_mes_fin: mes ?? 12,
+    })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    const agrupado: Record<string, any> = {}
-    saldos?.forEach((row: any) => {
-      const pc = row.plan_cuentas
-      if (!agrupado[row.cuenta_id]) {
-        agrupado[row.cuenta_id] = {
-          cuenta_id:     row.cuenta_id,
-          codigo_cuenta: pc.codigo,
-          nombre:        pc.nombre,
-          tipo:          pc.tipo,
-          naturaleza:    pc.naturaleza,
-          nivel:         pc.nivel,
-          total_debe:    0,
-          total_haber:   0,
-        }
-      }
-      agrupado[row.cuenta_id].total_debe  += Number(row.saldo_debe)
-      agrupado[row.cuenta_id].total_haber += Number(row.saldo_haber)
-    })
-
-    const cuentas = Object.values(agrupado)
+    const cuentas = (filas ?? [])
+      .map((f: any) => ({
+        cuenta_id:      f.cuenta_id,
+        codigo_cuenta:  f.codigo,
+        nombre:         f.nombre,
+        tipo:           f.tipo,
+        total_debe:     Math.round(Number(f.total_debe)  * 100) / 100,
+        total_haber:    Math.round(Number(f.total_haber) * 100) / 100,
+        saldo_deudor:   Math.round(Number(f.saldo_deudor)   * 100) / 100,
+        saldo_acreedor: Math.round(Number(f.saldo_acreedor) * 100) / 100,
+      }))
       .sort((a: any, b: any) => a.codigo_cuenta.localeCompare(b.codigo_cuenta))
-      .map((c: any) => {
-        const debe  = Math.round(c.total_debe  * 100) / 100
-        const haber = Math.round(c.total_haber * 100) / 100
-        return {
-          ...c,
-          total_debe:     debe,
-          total_haber:    haber,
-          saldo_deudor:   c.naturaleza === 'deudora'   ? Math.max(0, debe - haber) : 0,
-          saldo_acreedor: c.naturaleza === 'acreedora' ? Math.max(0, haber - debe) : 0,
-        }
-      })
 
-    const totalDebe  = Math.round(cuentas.reduce((s, c) => s + c.total_debe,  0) * 100) / 100
-    const totalHaber = Math.round(cuentas.reduce((s, c) => s + c.total_haber, 0) * 100) / 100
+    const totalDebe  = Math.round(cuentas.reduce((s: number, c: any) => s + c.total_debe,  0) * 100) / 100
+    const totalHaber = Math.round(cuentas.reduce((s: number, c: any) => s + c.total_haber, 0) * 100) / 100
 
     return NextResponse.json({
       cuentas,
@@ -182,33 +160,24 @@ export async function GET(request: Request) {
   }
 
   // ── RESUMEN POR TIPO (Dashboard) ────────────────────────────
-  const { data: periodosAnio } = await supabase
-    .from('periodos_contables')
-    .select('id')
-    .eq('empresa_id', empresaId)
-    .eq('anio', anio)
+  // Igual que el balance, se calcula en vivo con get_libro_mayor() para
+  // todo el año en vez de depender de saldos_mayor / periodos_contables.
+  const { data: filasAnio, error: errorResumen } = await supabase.rpc('get_libro_mayor', {
+    p_empresa_id: empresaId,
+    p_anio: anio,
+    p_mes_inicio: 1,
+    p_mes_fin: 12,
+  })
 
-  const idsPeriodosAnio = (periodosAnio ?? []).map((p: any) => p.id)
-
-  if (idsPeriodosAnio.length === 0) {
-    return NextResponse.json({ resumen: { activo: 0, pasivo: 0, patrimonio: 0, ingreso: 0, costo: 0, gasto: 0 } })
-  }
-
-  const { data: saldos } = await supabase
-    .from('saldos_mayor')
-    .select('saldo_debe, saldo_haber, plan_cuentas!inner(tipo, nivel)')
-    .eq('empresa_id', empresaId)
-    .in('periodo_id', idsPeriodosAnio)
-    .eq('plan_cuentas.nivel', 3)
+  if (errorResumen) return NextResponse.json({ error: errorResumen.message }, { status: 500 })
 
   const resumen: Record<string, number> = {
     activo: 0, pasivo: 0, patrimonio: 0, ingreso: 0, costo: 0, gasto: 0,
   }
 
-  saldos?.forEach((s: any) => {
-    const t = s.plan_cuentas?.tipo
-    if (t && resumen[t] !== undefined) {
-      resumen[t] = Math.round((resumen[t] + Number(s.saldo_debe) - Number(s.saldo_haber)) * 100) / 100
+  filasAnio?.forEach((f: any) => {
+    if (f.tipo && resumen[f.tipo] !== undefined) {
+      resumen[f.tipo] = Math.round((resumen[f.tipo] + Number(f.total_debe) - Number(f.total_haber)) * 100) / 100
     }
   })
 

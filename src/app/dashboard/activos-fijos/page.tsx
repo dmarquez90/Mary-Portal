@@ -44,10 +44,22 @@ export default function ActivosFijosPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    // Obtener empresa_id desde localStorage
-    const eid = localStorage.getItem('empresa_id') || ''
-    setEmpresaId(eid)
-    if (eid) fetchActivos(eid)
+    async function init() {
+      // La empresa se resuelve por la sesión del usuario, no por localStorage
+      // (esa llave nunca se guardaba, así que esta página nunca cargaba datos).
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const [{ data: en }, { data: ej }] = await Promise.all([
+        supabase.from('empresas_persona_natural').select('id').eq('user_id', user.id).maybeSingle(),
+        supabase.from('empresas_juridicas').select('id').eq('user_id', user.id).maybeSingle(),
+      ])
+      const eid = en?.id ?? ej?.id ?? ''
+      setEmpresaId(eid)
+      if (eid) fetchActivos(eid)
+    }
+    init()
   }, [])
 
   async function fetchActivos(eid: string) {

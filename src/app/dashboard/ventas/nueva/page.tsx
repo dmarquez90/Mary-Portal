@@ -73,8 +73,12 @@ export default function NuevaFacturaPage() {
         setProductos((pr as Producto[]) ?? []);
         setCuentasBanco((bancos as CuentaBanco[]) ?? []);
         setCuentasCaja((cajas as CuentaCaja[]) ?? []);
-        if (bancos && bancos.length > 0) setCuentaBancoId(bancos[0].id);
-        if (cajas  && cajas.length  > 0) setCuentaCajaId(cajas[0].id);
+        // Preseleccionar la primera cuenta en córdobas (el total de la factura
+        // siempre se calcula en NIO - formatCurrency está fijo a esa moneda),
+        // para no depositar por defecto en una cuenta en USD.
+        const bancoNio = bancos?.find(b => b.moneda === "NIO") ?? bancos?.[0];
+        if (bancoNio) setCuentaBancoId(bancoNio.id);
+        if (cajas && cajas.length > 0) setCuentaCajaId(cajas[0].id);
       }
     }
     load();
@@ -303,7 +307,10 @@ export default function NuevaFacturaPage() {
                 <div>
                   <label className="label">Cuenta bancaria</label>
                   <select className="input" value={cuentaBancoId} onChange={e => setCuentaBancoId(e.target.value)}>
-                    {cuentasBanco.map(c => (
+                    {/* El total de la factura se calcula en córdobas (NIO), así que
+                        solo se listan cuentas en esa moneda para evitar depositar
+                        un monto en córdobas en una cuenta en dólares. */}
+                    {cuentasBanco.filter(c => c.moneda === "NIO").map(c => (
                       <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>
                     ))}
                   </select>

@@ -45,9 +45,23 @@ export default function TributacionPage() {
   const [filtroEstado, setFiltroEstado] = useState('pendiente')
 
   useEffect(() => {
-    const eid = localStorage.getItem('empresa_id') || ''
-    setEmpresaId(eid)
-    if (eid) fetchCalendario(eid, anio, 'pendiente')
+    async function init() {
+      // La empresa se resuelve por la sesión del usuario (igual que el resto
+      // del dashboard), no por localStorage — esa llave nunca se guardaba,
+      // por lo que este calendario nunca llegaba a cargar datos.
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const [{ data: en }, { data: ej }] = await Promise.all([
+        supabase.from('empresas_persona_natural').select('id').eq('user_id', user.id).maybeSingle(),
+        supabase.from('empresas_juridicas').select('id').eq('user_id', user.id).maybeSingle(),
+      ])
+      const eid = en?.id ?? ej?.id ?? ''
+      setEmpresaId(eid)
+      if (eid) fetchCalendario(eid, anio, 'pendiente')
+    }
+    init()
   }, [])
 
   async function fetchCalendario(eid: string, a: number, estado?: string) {

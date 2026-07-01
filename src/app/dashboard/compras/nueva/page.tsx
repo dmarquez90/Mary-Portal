@@ -87,9 +87,12 @@ export default function NuevaCompraPage() {
         setProductos((prod as Producto[]) ?? []);
         setCuentasBanco((bancos as CuentaBanco[]) ?? []);
         setCuentasCaja((cajas as CuentaCaja[]) ?? []);
-        // Preseleccionar la primera cuenta disponible
-        if (bancos && bancos.length > 0) setCuentaBancoId(bancos[0].id);
-        if (cajas  && cajas.length  > 0) setCuentaCajaId(cajas[0].id);
+        // Preseleccionar la primera cuenta en córdobas (los montos de la compra
+        // siempre se calculan en NIO - formatCurrency está fijo a esa moneda),
+        // para no depositar por defecto en una cuenta en USD.
+        const bancoNio = bancos?.find(b => b.moneda === "NIO") ?? bancos?.[0];
+        if (bancoNio) setCuentaBancoId(bancoNio.id);
+        if (cajas && cajas.length > 0) setCuentaCajaId(cajas[0].id);
       }
     }
     load();
@@ -354,7 +357,10 @@ export default function NuevaCompraPage() {
                 <div>
                   <label className="label">Cuenta bancaria</label>
                   <select className="input" value={cuentaBancoId} onChange={e => setCuentaBancoId(e.target.value)}>
-                    {cuentasBanco.map(c => (
+                    {/* El total de la compra se calcula en córdobas (NIO), así que
+                        solo se listan cuentas en esa moneda para evitar pagar un
+                        monto en córdobas desde una cuenta en dólares. */}
+                    {cuentasBanco.filter(c => c.moneda === "NIO").map(c => (
                       <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>
                     ))}
                   </select>

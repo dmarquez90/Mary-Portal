@@ -85,9 +85,14 @@ export async function POST(request: Request) {
     }, { status: 400 })
   }
 
-  const fechaDate = new Date(fecha)
-  const periodo_anio = fechaDate.getFullYear()
-  const periodo_mes = fechaDate.getMonth() + 1
+  // Parseamos "YYYY-MM-DD" como texto en vez de `new Date(fecha)`: ese
+  // constructor interpreta la fecha en UTC y luego getFullYear()/getMonth()
+  // la convierten a la zona horaria local, lo que puede correr el mes hacia
+  // atrás (p.ej. "2026-03-01" pasaba a quedar en periodo_mes=2) y desincroniza
+  // periodo_anio/periodo_mes de la columna `fecha` guardada.
+  const [anioStr, mesStr] = String(fecha).split('-')
+  const periodo_anio = parseInt(anioStr, 10)
+  const periodo_mes = parseInt(mesStr, 10)
 
   const { data: periodo } = await supabase
     .from('periodos_contables')

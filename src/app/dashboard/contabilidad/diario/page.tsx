@@ -19,6 +19,7 @@ export default function LibroDiarioPage() {
   const [loading, setLoading] = useState(true)
   const [anio, setAnio] = useState(anioActual)
   const [mes, setMes] = useState(mesActual)
+  const [listo, setListo] = useState(false)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
@@ -34,7 +35,28 @@ export default function LibroDiarioPage() {
     lineas: [lineaVacia(), lineaVacia()],
   })
 
-  useEffect(() => { cargarTodo() }, [anio, mes])
+  // Al entrar, en vez de asumir que hay asientos en el mes calendario actual,
+  // buscamos el año/mes más reciente que sí tenga movimientos (los asientos
+  // automáticos se registran en la fecha de la venta/compra, no en "hoy").
+  useEffect(() => {
+    async function detectarPeriodoInicial() {
+      for (const a of [anioActual, anioActual - 1]) {
+        const r = await fetch(`/api/asientos?anio=${a}`)
+        const d = await r.json()
+        const lista: Asiento[] = d.asientos || []
+        if (lista.length > 0) {
+          const ultimaFecha = lista.reduce((max, x) => (x.fecha > max ? x.fecha : max), lista[0].fecha)
+          setAnio(a)
+          setMes(new Date(`${ultimaFecha}T00:00:00`).getMonth() + 1)
+          break
+        }
+      }
+      setListo(true)
+    }
+    detectarPeriodoInicial()
+  }, [])
+
+  useEffect(() => { if (listo) cargarTodo() }, [anio, mes, listo])
 
   async function cargarTodo() {
     setLoading(true)

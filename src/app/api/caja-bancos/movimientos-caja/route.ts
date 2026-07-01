@@ -66,23 +66,9 @@ export async function POST(req: Request) {
 
   if (movErr) return NextResponse.json({ error: movErr.message }, { status: 500 })
 
-  // Actualizar saldo de caja
-  const { data: caja } = await supabase
-    .from('cuentas_caja')
-    .select('saldo_actual')
-    .eq('id', cuenta_caja_id)
-    .single()
-
-  if (caja) {
-    const nuevoSaldo = tipo === 'ingreso'
-      ? Number(caja.saldo_actual) + montoNum
-      : Number(caja.saldo_actual) - montoNum
-
-    await supabase
-      .from('cuentas_caja')
-      .update({ saldo_actual: nuevoSaldo, updated_at: new Date().toISOString() })
-      .eq('id', cuenta_caja_id)
-  }
+  // El saldo de cuentas_caja se actualiza automáticamente vía trigger
+  // trg_saldo_caja (AFTER INSERT ON movimientos_caja). Actualizarlo aquí
+  // también duplicaría el ajuste sobre el mismo movimiento.
 
   return NextResponse.json({ movimiento: mov })
 }
