@@ -37,16 +37,16 @@ export async function GET(req: NextRequest) {
       utilRetInicio, utilRetMovimiento, utilRetFin,
       utilEjercicio,
     ] = await Promise.all([
-      getSaldoCuentas(supabase, empresaId, ['3.1.1'], inicioHist, diaAntes, true),
-      getSaldoCuentas(supabase, empresaId, ['3.1.1'], inicio, fin),
-      getSaldoCuentas(supabase, empresaId, ['3.1.1'], inicioHist, fin, true),
-      getSaldoCuentas(supabase, empresaId, ['3.1.2'], inicioHist, diaAntes, true),
-      getSaldoCuentas(supabase, empresaId, ['3.1.2'], inicio, fin),
-      getSaldoCuentas(supabase, empresaId, ['3.1.2'], inicioHist, fin, true),
-      getSaldoCuentas(supabase, empresaId, ['3.2.1'], inicioHist, diaAntes, true),
-      getSaldoCuentas(supabase, empresaId, ['3.2.1'], inicio, fin),
-      getSaldoCuentas(supabase, empresaId, ['3.2.1'], inicioHist, fin, true),
-      getSaldoCuentas(supabase, empresaId, ['3.2.2'], inicio, fin),
+      getSaldoCuentas(supabase, empresaId, ['3.1.01'], inicioHist, diaAntes, true),
+      getSaldoCuentas(supabase, empresaId, ['3.1.01'], inicio, fin),
+      getSaldoCuentas(supabase, empresaId, ['3.1.01'], inicioHist, fin, true),
+      getSaldoCuentas(supabase, empresaId, ['3.1.02'], inicioHist, diaAntes, true),
+      getSaldoCuentas(supabase, empresaId, ['3.1.02'], inicio, fin),
+      getSaldoCuentas(supabase, empresaId, ['3.1.02'], inicioHist, fin, true),
+      getSaldoCuentas(supabase, empresaId, ['3.2.01', '3.2.02'], inicioHist, diaAntes, true),
+      getSaldoCuentas(supabase, empresaId, ['3.2.01', '3.2.02'], inicio, fin),
+      getSaldoCuentas(supabase, empresaId, ['3.2.01', '3.2.02'], inicioHist, fin, true),
+      getSaldoCuentas(supabase, empresaId, ['3.2.03'], inicio, fin),
     ])
 
     const totalInicio = capitalInicio + reservaInicio + utilRetInicio
