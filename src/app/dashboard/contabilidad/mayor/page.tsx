@@ -1,6 +1,7 @@
 'use client'
 // src/app/dashboard/contabilidad/mayor/page.tsx
 import { useEffect, useState } from 'react'
+import AlertasSaldoNegativo from '@/components/contabilidad/AlertasSaldoNegativo'
 
 type Cuenta = { id: string; codigo: string; nombre: string; tipo: string }
 
@@ -82,6 +83,10 @@ export default function LibroMayorPage() {
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-gray-900">Libro Mayor</h1>
         <p className="text-sm text-gray-500">Movimientos y saldos acumulados por cuenta contable</p>
+      </div>
+
+      <div className="mb-6">
+        <AlertasSaldoNegativo />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

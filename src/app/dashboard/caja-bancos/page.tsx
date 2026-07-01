@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback } from 'react'
 import { Landmark, Plus, Building2, Wallet, ArrowDownLeft, ArrowUpRight, BookCheck, X } from 'lucide-react'
+import AlertasSaldoNegativo from '@/components/contabilidad/AlertasSaldoNegativo'
 
 // ── Types ─────────────────────────────────────────────────────
 interface CuentaBanco {
@@ -307,6 +308,8 @@ export default function CajaBancosPage() {
         </div>
         <div>{botonPrincipal()}</div>
       </div>
+
+      <AlertasSaldoNegativo />
 
       {/* Totales */}
       {resumen && (

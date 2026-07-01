@@ -3,6 +3,7 @@
 // Dashboard de Contabilidad — resumen de los 4 módulos
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import AlertasSaldoNegativo from '@/components/contabilidad/AlertasSaldoNegativo'
 
 const MODULOS = [
   {
@@ -95,6 +96,8 @@ export default function ContabilidadPage() {
           Ley 822 LCT · Código Tributario · NIIF PYMES Nicaragua — Período fiscal {anio}
         </p>
       </div>
+
+      <AlertasSaldoNegativo />
 
       {/* Aviso si no tiene plan de cuentas */}
       {!loading && !planIniciado && (
