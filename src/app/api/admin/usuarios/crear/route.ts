@@ -4,8 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const ROLES_VALIDOS = ["admin", "contador", "auxiliar", "ventas"] as const;
 
-function generarPasswordTemporal(): string {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+function validarPassword(password: string): string | null {
+  if (password.length < 8) return "La contraseña debe tener al menos 8 caracteres";
+  if (!/[A-Z]/.test(password)) return "La contraseña debe tener al menos una letra mayúscula";
+  if (!/[0-9]/.test(password)) return "La contraseña debe tener al menos un número";
+  return null;
 }
 
 // POST /api/admin/usuarios/crear
@@ -14,6 +17,9 @@ function generarPasswordTemporal(): string {
 // -- se resuelve del lado servidor a partir de su propia sesión, para que un
 // admin no pueda crear usuarios en una empresa ajena. Solo super_admin puede
 // especificar empresa_id explícitamente (gestión cross-empresa).
+//
+// La contraseña la escribe el admin al crear el usuario (no se autogenera).
+// El usuario puede cambiarla después desde Configuración > Contraseña.
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -22,13 +28,21 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const email = body?.email as string | undefined;
   const rol = body?.rol as string | undefined;
+  const password = body?.password as string | undefined;
   const empresaIdBody = body?.empresa_id as string | undefined;
 
-  if (!email || !rol) {
-    return NextResponse.json({ error: "email y rol son requeridos" }, { status: 400 });
+  if (!email || !rol || !password) {
+    return NextResponse.json({ error: "email, rol y contraseña son requeridos" }, { status: 400 });
   }
   if (!ROLES_VALIDOS.includes(rol as typeof ROLES_VALIDOS[number])) {
     return NextResponse.json({ error: "rol inválido" }, { status: 400 });
+  }
+
+  // Validación server-side de la contraseña: nunca confiar solo en el
+  // formulario del cliente, alguien podría pegarle directo al endpoint.
+  const errorPassword = validarPassword(password);
+  if (errorPassword) {
+    return NextResponse.json({ error: errorPassword }, { status: 400 });
   }
 
   const { data: superAdminRow } = await supabase
@@ -67,10 +81,9 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
-  const passwordTemporal = generarPasswordTemporal();
   const { data: nuevoUsuario, error: errorCreate } = await admin.auth.admin.createUser({
     email,
-    password: passwordTemporal,
+    password,
     email_confirm: true,
   });
   if (errorCreate || !nuevoUsuario.user) {
@@ -92,6 +105,5 @@ export async function POST(request: Request) {
     success: true,
     usuario_id: nuevoUsuario.user.id,
     empresa_usuario_id: empresaUsuarioId,
-    password_temporal: passwordTemporal,
   });
 }

@@ -34,10 +34,12 @@ import {
   FileX,
   Calculator,
   Banknote,
+  UserCog,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { usePermissionsSARA } from "@/hooks/usePermissionsSARA";
 
 const NAV_PRINCIPAL = [
   { href: "/dashboard",              icon: LayoutDashboard, label: "Inicio"        },
@@ -102,6 +104,10 @@ export default function Sidebar() {
   const [avanzadoOpen, setAvanzadoOpen] = useState(
     ["/dashboard/cxc","/dashboard/cxp","/dashboard/conciliacion","/dashboard/cierre","/dashboard/notas"].some(p => pathname.startsWith(p))
   );
+
+  // Permisos del usuario/rol en la empresa activa — controla la visibilidad
+  // de "Usuarios y Roles" (solo quien tenga usuarios_ver debe verlo).
+  const { can } = usePermissionsSARA();
 
   async function handleLogout() {
     const { createClient } = await import("@/lib/supabase/client");
@@ -292,9 +298,12 @@ export default function Sidebar() {
             )}
           </div>
 
-          {/* Configuración */}
+          {/* Empresa / Administración */}
           <div className="pt-3">
             <div className="border-t border-white/10 mb-3" />
+            {can("usuarios_ver") && (
+              <NavLink href="/dashboard/empresa/usuarios" icon={UserCog} label="Usuarios y Roles" />
+            )}
             <NavLink href="/dashboard/configuracion" icon={Settings} label="Configuración" />
           </div>
 

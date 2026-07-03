@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { UserPlus, Ban, CheckCircle2, Settings2 } from "lucide-react";
+import { UserPlus, Ban, CheckCircle2, Settings2, Eye, EyeOff, Trash2 } from "lucide-react";
 import { usePermissionsSARA } from "@/hooks/usePermissionsSARA";
 import { MODULOS_PERMISOS, type Rol, type PermisosCustom } from "@/lib/permissions";
 
@@ -29,6 +29,8 @@ export default function UsuariosEmpresaPage() {
   const [creando, setCreando] = useState(false);
   const [emailNuevo, setEmailNuevo] = useState("");
   const [rolNuevo, setRolNuevo] = useState<Rol>("auxiliar");
+  const [passwordNuevo, setPasswordNuevo] = useState("");
+  const [mostrarPassword, setMostrarPassword] = useState(false);
   const [editandoPermisos, setEditandoPermisos] = useState<UsuarioEmpresa | null>(null);
 
   const cargar = useCallback(async () => {
@@ -43,20 +45,33 @@ export default function UsuariosEmpresaPage() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
+  // Requisitos de contraseña — mismos que la pestaña de Configuración >
+  // Contraseña, para que el criterio sea consistente en toda la app.
+  const passLongitud  = passwordNuevo.length >= 8;
+  const passMayuscula = /[A-Z]/.test(passwordNuevo);
+  const passNumero    = /[0-9]/.test(passwordNuevo);
+  const passwordValida = passLongitud && passMayuscula && passNumero;
+
   async function crearUsuario(e: React.FormEvent) {
     e.preventDefault();
+    if (!passwordValida) {
+      toast.error("La contraseña no cumple los requisitos mínimos");
+      return;
+    }
     setCreando(true);
     const res = await fetch("/api/admin/usuarios/crear", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: emailNuevo, rol: rolNuevo }),
+      body: JSON.stringify({ email: emailNuevo, rol: rolNuevo, password: passwordNuevo }),
     });
     const data = await res.json();
     setCreando(false);
     if (!res.ok) { toast.error(data.error ?? "No se pudo crear el usuario"); return; }
-    toast.success(`Usuario creado. Contraseña temporal: ${data.password_temporal}`, { duration: 15000 });
+    toast.success(`Usuario ${emailNuevo} creado correctamente`);
     setEmailNuevo("");
     setRolNuevo("auxiliar");
+    setPasswordNuevo("");
+    setMostrarPassword(false);
     cargar();
   }
 
@@ -76,6 +91,25 @@ export default function UsuariosEmpresaPage() {
     const { error } = await supabase.rpc("fn_reactivar_usuario", { p_empresa_usuario_id: u.id });
     if (error) toast.error(error.message);
     else { toast.success("Usuario reactivado"); cargar(); }
+  }
+
+  async function eliminar(u: UsuarioEmpresa) {
+    const confirmado = window.confirm(
+      `Esto elimina PERMANENTEMENTE la cuenta de ${u.email ?? u.usuario_id} de Supabase (no solo el acceso a esta empresa). No se puede deshacer. ¿Continuar?`
+    );
+    if (!confirmado) return;
+    const razon = window.prompt(`Razón para eliminar a ${u.email ?? u.usuario_id}:`);
+    if (razon === null || razon.trim() === "") { toast.error("La razón es obligatoria"); return; }
+
+    const res = await fetch("/api/admin/usuarios/eliminar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ empresa_usuario_id: u.id, razon }),
+    });
+    const data = await res.json();
+    if (!res.ok) { toast.error(data.error ?? "No se pudo eliminar el usuario"); return; }
+    toast.success("Usuario eliminado");
+    cargar();
   }
 
   async function guardarPermisosCustom(u: UsuarioEmpresa, permisos: PermisosCustom) {
@@ -113,20 +147,57 @@ export default function UsuariosEmpresaPage() {
       </div>
 
       {can("usuarios_gestionar") && (
-        <form onSubmit={crearUsuario} className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 p-4">
-          <div className="flex-1 min-w-[220px]">
-            <label className="block text-xs font-medium text-slate-600 mb-1">Correo del nuevo usuario</label>
-            <input type="email" required value={emailNuevo} onChange={e => setEmailNuevo(e.target.value)}
-              className="input w-full" placeholder="usuario@empresa.com" />
+        <form onSubmit={crearUsuario} className="mb-6 space-y-3 rounded-xl border border-slate-200 p-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[220px]">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Correo del nuevo usuario</label>
+              <input type="email" required value={emailNuevo} onChange={e => setEmailNuevo(e.target.value)}
+                className="input w-full" placeholder="usuario@empresa.com" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Rol</label>
+              <select value={rolNuevo} onChange={e => setRolNuevo(e.target.value as Rol)} className="input">
+                {ROLES.filter(r => r !== "admin" || rol === "admin").map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Rol</label>
-            <select value={rolNuevo} onChange={e => setRolNuevo(e.target.value as Rol)} className="input">
-              {ROLES.filter(r => r !== "admin" || rol === "admin").map(r => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Contraseña de acceso</label>
+            <div className="relative max-w-xs">
+              <input
+                type={mostrarPassword ? "text" : "password"}
+                required
+                value={passwordNuevo}
+                onChange={e => setPasswordNuevo(e.target.value)}
+                className="input w-full pr-10"
+                placeholder="Contraseña para este usuario"
+              />
+              <button type="button" onClick={() => setMostrarPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                {mostrarPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            {passwordNuevo.length > 0 && (
+              <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                <li className={`text-xs ${passLongitud ? "text-emerald-600" : "text-slate-400"}`}>
+                  {passLongitud ? "✓" : "·"} Mínimo 8 caracteres
+                </li>
+                <li className={`text-xs ${passMayuscula ? "text-emerald-600" : "text-slate-400"}`}>
+                  {passMayuscula ? "✓" : "·"} Una mayúscula
+                </li>
+                <li className={`text-xs ${passNumero ? "text-emerald-600" : "text-slate-400"}`}>
+                  {passNumero ? "✓" : "·"} Un número
+                </li>
+              </ul>
+            )}
+            <p className="text-xs text-slate-400 mt-1">
+              Comparte esta contraseña con el usuario. Podrá cambiarla luego desde Configuración → Contraseña.
+            </p>
           </div>
+
           <button type="submit" disabled={creando} className="btn-primary flex items-center gap-2">
             <UserPlus size={16} /> Crear usuario
           </button>
@@ -167,6 +238,9 @@ export default function UsuariosEmpresaPage() {
                       )}
                       <button onClick={() => setEditandoPermisos(u)} className="text-slate-600 hover:underline flex items-center gap-1">
                         <Settings2 size={14} /> Permisos
+                      </button>
+                      <button onClick={() => eliminar(u)} className="text-red-700 hover:underline flex items-center gap-1">
+                        <Trash2 size={14} /> Eliminar
                       </button>
                     </div>
                   )}
