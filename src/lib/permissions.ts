@@ -42,6 +42,9 @@ export const MATRIX = {
   reportes_dgi_ver:               { admin: true, contador: true,  auxiliar: false, ventas: false },
   reportes_dgi_exportar:          { admin: true, contador: true,  auxiliar: false, ventas: false },
 
+  vet_ver:                        { admin: true, contador: true,  auxiliar: false, ventas: false },
+  vet_editar:                     { admin: true, contador: true,  auxiliar: false, ventas: false },
+
   cierre_periodo:                 { admin: true, contador: false, auxiliar: false, ventas: false },
   reabrir_periodo:                { admin: true, contador: false, auxiliar: false, ventas: false },
 
@@ -56,9 +59,9 @@ export type Permiso = keyof typeof MATRIX;
 export const NAV_PERMISOS: Record<Rol, string[]> = {
   admin:    ["dashboard","facturacion","compras","inventario","asientos_contables",
              "caja_bancos","activos_fijos","nomina","reportes_dgi","cierre_periodo",
-             "usuarios","configuracion"],
+             "usuarios","configuracion","vet"],
   contador: ["dashboard","facturacion","compras","inventario","asientos_contables",
-             "caja_bancos","activos_fijos","reportes_dgi"],
+             "caja_bancos","activos_fijos","reportes_dgi","vet"],
   auxiliar: ["dashboard","facturacion","compras","inventario","asientos_contables",
              "caja_bancos","activos_fijos"],
   ventas:   ["dashboard","facturacion","cxc","inventario"],
@@ -79,6 +82,7 @@ export const MODULOS_PERMISOS = [
   { id: "cierre_periodo",      label: "Cierre de Período",         tieneEditar: true },
   { id: "usuarios",            label: "Usuarios",                  tieneEditar: true },
   { id: "configuracion",       label: "Configuración",             tieneEditar: false },
+  { id: "vet",                 label: "Cumplimiento VET",          tieneEditar: true },
 ] as const;
 
 // Mapea cada permiso granular al módulo/tipo que permisos_custom puede
@@ -112,6 +116,8 @@ export const PERMISO_A_MODULO: Partial<Record<Permiso, [string, "ver" | "editar"
   usuarios_ver: ["usuarios", "ver"],
   usuarios_gestionar: ["usuarios", "editar"],
   configuracion: ["configuracion", "ver"],
+  vet_ver: ["vet", "ver"],
+  vet_editar: ["vet", "editar"],
 };
 
 export type PermisosCustom = Record<string, { ver?: boolean; editar?: boolean }>;

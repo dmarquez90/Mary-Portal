@@ -35,6 +35,7 @@ import {
   Calculator,
   Banknote,
   UserCog,
+  ShieldCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -273,6 +274,9 @@ export default function Sidebar() {
                 {NAV_TRIBUTACION.map(({ href, icon, label }) => (
                   <NavLink key={href} href={href} icon={icon} label={label} />
                 ))}
+                {can("vet_ver") && (
+                  <NavLink href="/dashboard/vet" icon={ShieldCheck} label="Cumplimiento VET" />
+                )}
               </div>
             )}
           </div>
