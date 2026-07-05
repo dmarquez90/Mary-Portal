@@ -65,9 +65,10 @@ export async function POST(req: NextRequest) {
   const digitos = consec?.digitos ?? 6
   const numero_nota = `${prefijo}-${String(numero).padStart(digitos, '0')}`
 
-  // Calcular totales desde detalles
-  const subtotal = detalles?.reduce((s: number, d: { subtotal?: number }) => s + (d.subtotal ?? 0), 0) ?? resto.subtotal ?? 0
-  const iva = detalles?.reduce((s: number, d: { iva?: number }) => s + (d.iva ?? 0), 0) ?? resto.iva ?? 0
+  // Calcular totales desde detalles (si hay); si el documento no tiene ítems
+  // detallados, detalles llega como [] y hay que usar el monto manual del payload
+  const subtotal = detalles?.length ? detalles.reduce((s: number, d: { subtotal?: number }) => s + (d.subtotal ?? 0), 0) : (resto.subtotal ?? 0)
+  const iva = detalles?.length ? detalles.reduce((s: number, d: { iva?: number }) => s + (d.iva ?? 0), 0) : (resto.iva ?? 0)
   const total = subtotal + iva
 
   const { data: nota, error: errNota } = await supabase

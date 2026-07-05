@@ -39,6 +39,7 @@ interface Compra {
 
 interface DetalleItem {
   id: string
+  producto_id?: string | null
   descripcion: string
   cantidad: number
   precio_unitario: number
@@ -127,10 +128,10 @@ export default function NotasCreditoDebitoPage() {
     const supabase = createClient()
     const { data } = await supabase
       .from('detalle_facturas')
-      .select('id,descripcion,cantidad,precio_unitario,iva,total')
+      .select('id,producto_id,descripcion,cantidad,precio_unitario,iva,total')
       .eq('factura_id', facturaId)
     if (data && data.length > 0) {
-      setItems(data.map((d: { id: string; descripcion: string; cantidad: number; precio_unitario: number; iva: number; total: number }) => ({
+      setItems(data.map((d: { id: string; producto_id: string | null; descripcion: string; cantidad: number; precio_unitario: number; iva: number; total: number }) => ({
         ...d,
         cant_devolver: d.cantidad,
         seleccionado: true,
@@ -223,6 +224,23 @@ export default function NotasCreditoDebitoPage() {
       motivoFinal = `${motivo} | Ítems: ${detalleItems}`
     }
 
+    const detallesPayload = !modoManual && itemsSeleccionados.length > 0
+      ? itemsSeleccionados.map(it => {
+          const proporcional = it.cant_devolver / it.cantidad
+          const sub = it.precio_unitario * it.cant_devolver
+          const iva = it.iva * proporcional
+          return {
+            producto_id: it.producto_id ?? null,
+            descripcion: it.descripcion,
+            cantidad: it.cant_devolver,
+            precio_unitario: it.precio_unitario,
+            subtotal: sub,
+            iva,
+            total: sub + iva,
+          }
+        })
+      : undefined
+
     const r = await fetch('/api/notas-credito-debito', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -236,12 +254,56 @@ export default function NotasCreditoDebitoPage() {
         subtotal: subFinal,
         iva: ivaFinal,
         total: totFinal,
-        estado: 'emitida',
+        estado: 'emitida', // se marca 'aplicada' abajo, tras reflejar su efecto en el documento origen
+        detalles: detallesPayload,
       })
     })
     const d = await r.json()
+    if (!r.ok) { setSaving(false); setError(d.error || 'Error al guardar'); return }
+
+    // Si la nota está ligada a una factura de venta, reflejar su efecto ahí:
+    // restaurar stock, anular/ajustar la factura, y marcar la nota como aplicada.
+    // Sin esto la factura queda "Emitida" para siempre y la NC "flota" sin efecto contable real.
+    if (tipo === 'credito' && refFacturaId) {
+      const { createClient } = await import('@/lib/supabase/client')
+      const { restaurarStockPorDevolucion, aplicarNotaCreditoAFactura, marcarNotaComoAplicada } = await import('@/lib/notas-credito')
+      const supabase = createClient()
+
+      if (!modoManual && itemsSeleccionados.length > 0) {
+        await restaurarStockPorDevolucion(
+          supabase,
+          itemsSeleccionados.map(it => ({
+            producto_id: it.producto_id,
+            cant_devolver: it.cant_devolver,
+            precio_unitario: it.precio_unitario,
+          })),
+          d.numero_nota,
+          `Devolución ${d.numero_nota} — Factura ${facturaSeleccionada?.numero_factura ?? ''}`
+        )
+      }
+
+      // Total: se devolvieron todos los ítems al 100%, o (sin ítems) el monto
+      // manual coincide con el total de la factura — si no, es un ajuste parcial.
+      const esAnulacionTotalItems = !modoManual && items.length > 0 &&
+        items.every(it => it.seleccionado && it.cant_devolver === it.cantidad)
+      const esTotalPorMonto = modoManual && facturaSeleccionada != null &&
+        Math.abs(totFinal - Number(facturaSeleccionada.total)) < 0.01
+      const esTotal = esAnulacionTotalItems || esTotalPorMonto
+
+      const { error: aplicarError } = await aplicarNotaCreditoAFactura({
+        supabase, facturaId: refFacturaId, esTotal,
+        subtotalNC: subFinal, ivaNC: ivaFinal, numeroNota: d.numero_nota,
+      })
+      if (aplicarError) {
+        setSaving(false)
+        setError(`Nota ${d.numero_nota} creada, pero no se pudo actualizar la factura: ${aplicarError}`)
+        return
+      }
+      await marcarNotaComoAplicada(supabase, d.id)
+      fetchDocumentos(empresaId, supabase)
+    }
+
     setSaving(false)
-    if (!r.ok) { setError(d.error || 'Error al guardar'); return }
     setShowForm(false)
     resetForm()
     fetchNotas(empresaId, filtroTipo !== 'todos' ? filtroTipo : undefined)

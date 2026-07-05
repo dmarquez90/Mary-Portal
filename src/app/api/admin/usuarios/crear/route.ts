@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const ROLES_VALIDOS = ["admin", "contador", "auxiliar", "ventas"] as const;
+const ROLES_VALIDOS = ["admin", "contador", "auxiliar", "ventas", "cajero"] as const;
 
 function validarPassword(password: string): string | null {
   if (password.length < 8) return "La contraseña debe tener al menos 8 caracteres";

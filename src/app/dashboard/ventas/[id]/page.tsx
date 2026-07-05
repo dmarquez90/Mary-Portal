@@ -219,13 +219,19 @@ export default function FacturaDetallePage() {
   const esAnulacionTotal = items.length > 0 &&
     items.every(it => it.seleccionado && it.cant_devolver === it.cantidad);
 
+  // Sin ítems detallados no hay nada que "seleccionar": la NC se genera por
+  // el total de la factura, tal como advierte el aviso mostrado en ese caso.
+  const tieneDetalles = (factura?.detalles?.length ?? 0) > 0;
+  const esTotal = esAnulacionTotal || !tieneDetalles;
+
   async function handleConfirmarAnulacion() {
     if (!factura) return;
     if (!motivo.trim()) { toast.error("Ingresa el motivo de la anulación."); return; }
-    if (itemsSeleccionados.length === 0) { toast.error("Selecciona al menos un ítem."); return; }
+    if (tieneDetalles && itemsSeleccionados.length === 0) { toast.error("Selecciona al menos un ítem."); return; }
 
     setProcesando(true);
     const { createClient } = await import("@/lib/supabase/client");
+    const { restaurarStockPorDevolucion, aplicarNotaCreditoAFactura, marcarNotaComoAplicada } = await import("@/lib/notas-credito");
     const supabase = createClient();
 
     // ── 1. Generar Nota de Crédito vía API ───────────────────
@@ -242,15 +248,20 @@ export default function FacturaDetallePage() {
       };
     });
 
+    // Sin ítems, el monto de la NC es el total (restante) de la factura
+    const subtotalFinal = tieneDetalles ? subtotalNC : Number(factura.subtotal);
+    const ivaFinal       = tieneDetalles ? ivaNC      : Number(factura.iva_total);
+
     const ncPayload = {
-      empresa_id:    factura.id ? undefined : "",   // se resolverá abajo
       tipo:          "credito",
       ref_factura_id: factura.id,
       cliente_id:    factura.cliente_id ?? null,
       fecha:         new Date().toISOString().split("T")[0],
       motivo:        motivo.trim(),
-      estado:        "aplicada",
+      estado:        "emitida", // se marca "aplicada" tras reflejar su efecto en la factura
       detalles:      detallesNC,
+      subtotal:      subtotalFinal,
+      iva:           ivaFinal,
     };
 
     // Obtener empresa_id desde la factura
@@ -273,51 +284,30 @@ export default function FacturaDetallePage() {
     }
     const nc = await r.json();
 
-    // ── 2. Restaurar stock para ítems devueltos (trigger lo hará
-    //       cuando anulemos, pero para NC parcial lo hacemos manual) ──
-    for (const it of itemsSeleccionados) {
-      if (!it.producto_id || it.cant_devolver <= 0) continue;
-      const { data: prod } = await supabase
-        .from("productos").select("stock_actual, empresa_id").eq("id", it.producto_id).single();
-      if (!prod) continue;
-      await supabase.from("productos")
-        .update({ stock_actual: Number(prod.stock_actual) + Number(it.cant_devolver), updated_at: new Date().toISOString() })
-        .eq("id", it.producto_id);
-      // Registrar movimiento de entrada (devolución)
-      await supabase.from("movimientos_inventario").insert({
-        empresa_id:  prod.empresa_id,
-        producto_id: it.producto_id,
-        tipo:        "entrada",
-        cantidad:    it.cant_devolver,
-        stock_antes: Number(prod.stock_actual),
-        stock_despues: Number(prod.stock_actual) + Number(it.cant_devolver),
-        costo_unitario: it.precio_unitario,
-        referencia:  nc.numero_nota,
-        notas:       `Devolución NC ${nc.numero_nota} — Factura ${factura.numero_factura}`,
-      });
-    }
+    // ── 2. Restaurar stock para ítems devueltos ──────────────
+    await restaurarStockPorDevolucion(
+      supabase,
+      itemsSeleccionados.map(it => ({ producto_id: it.producto_id, cant_devolver: it.cant_devolver, precio_unitario: it.precio_unitario })),
+      nc.numero_nota,
+      `Devolución NC ${nc.numero_nota} — Factura ${factura.numero_factura}`
+    );
 
-    // ── 3. Si es anulación total → marcar factura como anulada ──
-    if (esAnulacionTotal) {
-      await supabase.from("facturas")
-        .update({ estado: "anulada", notas: (factura.notas ? factura.notas + " | " : "") + `Anulada con ${nc.numero_nota}` })
-        .eq("id", factura.id);
+    // ── 3. Reflejar el efecto en la factura de origen ────────
+    const { error: aplicarError } = await aplicarNotaCreditoAFactura({
+      supabase, facturaId: factura.id, esTotal,
+      subtotalNC: subtotalFinal, ivaNC: ivaFinal, numeroNota: nc.numero_nota,
+    });
+    if (aplicarError) {
+      toast.error(`Nota ${nc.numero_nota} creada, pero no se pudo actualizar la factura: ${aplicarError}`);
+      setProcesando(false);
+      return;
+    }
+    await marcarNotaComoAplicada(supabase, nc.id);
+
+    if (esTotal) {
       toast.success(`Factura anulada. Nota de Crédito ${nc.numero_nota} generada.`);
       router.push("/dashboard/ventas");
     } else {
-      // Anulación parcial → factura sigue emitida pero con NC parcial
-      // Actualizar totales de la factura (restar lo devuelto)
-      const nuevoSubtotal = Number(factura.subtotal) - subtotalNC;
-      const nuevoIva      = Number(factura.iva_total) - ivaNC;
-      const nuevoTotal    = nuevoSubtotal + nuevoIva;
-      await supabase.from("facturas")
-        .update({
-          subtotal:  nuevoSubtotal,
-          iva_total: nuevoIva,
-          total:     nuevoTotal,
-          notas:     (factura.notas ? factura.notas + " | " : "") + `NC parcial ${nc.numero_nota}`,
-        })
-        .eq("id", factura.id);
       toast.success(`Nota de Crédito parcial ${nc.numero_nota} generada por ${fmt(totalNC)}.`);
       setShowAnular(false);
       // Recargar factura actualizada
@@ -436,7 +426,6 @@ export default function FacturaDetallePage() {
   );
 
   const nombreCliente = factura.cliente?.nombre ?? factura.cliente_nombre ?? "Consumidor final";
-  const tieneDetalles = (factura.detalles?.length ?? 0) > 0;
 
   return (
     <>

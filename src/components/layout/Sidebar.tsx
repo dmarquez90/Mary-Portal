@@ -36,6 +36,7 @@ import {
   Banknote,
   UserCog,
   ShieldCheck,
+  Store,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -204,6 +205,9 @@ export default function Sidebar() {
           {NAV_PRINCIPAL.map(({ href, icon, label }) => (
             <NavLink key={href} href={href} icon={icon} label={label} />
           ))}
+          {can("pos_ver") && (
+            <NavLink href="/dashboard/pos" icon={Store} label="Punto de Venta" />
+          )}
 
           {/* Sección Contabilidad */}
           <div className="pt-3">

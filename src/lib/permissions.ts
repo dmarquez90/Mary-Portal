@@ -3,68 +3,76 @@
 // exacto de matriz_permisos_seed en Postgres (migración rbac_02) — si se
 // cambia un valor aquí, debe cambiarse también ahí.
 
-export type Rol = "admin" | "contador" | "auxiliar" | "ventas";
+export type Rol = "admin" | "contador" | "auxiliar" | "ventas" | "cajero";
 
 export const MATRIX = {
-  dashboard_ver:                 { admin: true, contador: true,  auxiliar: true,  ventas: true  },
+  dashboard_ver:                 { admin: true, contador: true,  auxiliar: true,  ventas: true,  cajero: true  },
 
-  facturacion_ver:                { admin: true, contador: true,  auxiliar: true,  ventas: true  },
-  facturacion_crear:              { admin: true, contador: true,  auxiliar: true,  ventas: true  },
-  facturacion_editar_borrador:    { admin: true, contador: true,  auxiliar: true,  ventas: false },
-  facturacion_anular:             { admin: true, contador: true,  auxiliar: false, ventas: false },
+  facturacion_ver:                { admin: true, contador: true,  auxiliar: true,  ventas: true,  cajero: false },
+  facturacion_crear:              { admin: true, contador: true,  auxiliar: true,  ventas: true,  cajero: false },
+  facturacion_editar_borrador:    { admin: true, contador: true,  auxiliar: true,  ventas: false, cajero: false },
+  facturacion_anular:             { admin: true, contador: true,  auxiliar: false, ventas: false, cajero: false },
 
-  compras_ver:                    { admin: true, contador: true,  auxiliar: true,  ventas: false },
-  compras_crear:                  { admin: true, contador: false, auxiliar: true,  ventas: false },
-  compras_editar_borrador:        { admin: true, contador: false, auxiliar: true,  ventas: false },
+  compras_ver:                    { admin: true, contador: true,  auxiliar: true,  ventas: false, cajero: false },
+  compras_crear:                  { admin: true, contador: false, auxiliar: true,  ventas: false, cajero: false },
+  compras_editar_borrador:        { admin: true, contador: false, auxiliar: true,  ventas: false, cajero: false },
 
-  cxc_ver:                        { admin: true, contador: true,  auxiliar: true,  ventas: true  },
-  cxp_ver:                        { admin: true, contador: true,  auxiliar: true,  ventas: false },
+  cxc_ver:                        { admin: true, contador: true,  auxiliar: true,  ventas: true,  cajero: false },
+  cxp_ver:                        { admin: true, contador: true,  auxiliar: true,  ventas: false, cajero: false },
 
-  inventario_ver:                 { admin: true, contador: true,  auxiliar: true,  ventas: true  },
-  inventario_editar:              { admin: true, contador: false, auxiliar: true,  ventas: false },
+  inventario_ver:                 { admin: true, contador: true,  auxiliar: true,  ventas: true,  cajero: false },
+  inventario_editar:              { admin: true, contador: false, auxiliar: true,  ventas: false, cajero: false },
 
-  asientos_ver:                   { admin: true, contador: true,  auxiliar: true,  ventas: false },
-  asientos_crear:                 { admin: true, contador: true,  auxiliar: true,  ventas: false },
-  asientos_contabilizar:          { admin: true, contador: true,  auxiliar: false, ventas: false },
-  asientos_anular:                { admin: true, contador: true,  auxiliar: false, ventas: false },
+  asientos_ver:                   { admin: true, contador: true,  auxiliar: true,  ventas: false, cajero: false },
+  asientos_crear:                 { admin: true, contador: true,  auxiliar: true,  ventas: false, cajero: false },
+  asientos_contabilizar:          { admin: true, contador: true,  auxiliar: false, ventas: false, cajero: false },
+  asientos_anular:                { admin: true, contador: true,  auxiliar: false, ventas: false, cajero: false },
 
-  caja_bancos_ver:                { admin: true, contador: true,  auxiliar: true,  ventas: false },
-  caja_bancos_editar:             { admin: true, contador: true,  auxiliar: false, ventas: false },
+  caja_bancos_ver:                { admin: true, contador: true,  auxiliar: true,  ventas: false, cajero: false },
+  caja_bancos_editar:             { admin: true, contador: true,  auxiliar: false, ventas: false, cajero: false },
 
-  activos_fijos_ver:              { admin: true, contador: true,  auxiliar: true,  ventas: false },
-  activos_fijos_editar:           { admin: true, contador: true,  auxiliar: false, ventas: false },
+  activos_fijos_ver:              { admin: true, contador: true,  auxiliar: true,  ventas: false, cajero: false },
+  activos_fijos_editar:           { admin: true, contador: true,  auxiliar: false, ventas: false, cajero: false },
 
   // fase 2: contador debería ver totales de nómina sin detalle por empleado
   // (valor 'agregado'). Por ahora, false simple (ver conversación de diseño).
-  nomina_ver:                     { admin: true, contador: false, auxiliar: false, ventas: false },
-  nomina_editar:                  { admin: true, contador: false, auxiliar: false, ventas: false },
+  nomina_ver:                     { admin: true, contador: false, auxiliar: false, ventas: false, cajero: false },
+  nomina_editar:                  { admin: true, contador: false, auxiliar: false, ventas: false, cajero: false },
 
-  reportes_dgi_ver:               { admin: true, contador: true,  auxiliar: false, ventas: false },
-  reportes_dgi_exportar:          { admin: true, contador: true,  auxiliar: false, ventas: false },
+  reportes_dgi_ver:               { admin: true, contador: true,  auxiliar: false, ventas: false, cajero: false },
+  reportes_dgi_exportar:          { admin: true, contador: true,  auxiliar: false, ventas: false, cajero: false },
 
-  vet_ver:                        { admin: true, contador: true,  auxiliar: false, ventas: false },
-  vet_editar:                     { admin: true, contador: true,  auxiliar: false, ventas: false },
+  vet_ver:                        { admin: true, contador: true,  auxiliar: false, ventas: false, cajero: false },
+  vet_editar:                     { admin: true, contador: true,  auxiliar: false, ventas: false, cajero: false },
 
-  cierre_periodo:                 { admin: true, contador: false, auxiliar: false, ventas: false },
-  reabrir_periodo:                { admin: true, contador: false, auxiliar: false, ventas: false },
+  cierre_periodo:                 { admin: true, contador: false, auxiliar: false, ventas: false, cajero: false },
+  reabrir_periodo:                { admin: true, contador: false, auxiliar: false, ventas: false, cajero: false },
 
-  usuarios_ver:                   { admin: true, contador: false, auxiliar: false, ventas: false },
-  usuarios_gestionar:             { admin: true, contador: false, auxiliar: false, ventas: false },
+  usuarios_ver:                   { admin: true, contador: false, auxiliar: false, ventas: false, cajero: false },
+  usuarios_gestionar:             { admin: true, contador: false, auxiliar: false, ventas: false, cajero: false },
 
-  configuracion:                  { admin: true, contador: false, auxiliar: false, ventas: false },
+  configuracion:                  { admin: true, contador: false, auxiliar: false, ventas: false, cajero: false },
+
+  // Punto de Venta (espejo de matriz_permisos_seed insertado en
+  // 20260705120100_pos_rol_cajero_permisos.sql)
+  pos_ver:                        { admin: true, contador: true,  auxiliar: true,  ventas: true,  cajero: true  },
+  pos_vender:                     { admin: true, contador: false, auxiliar: false, ventas: true,  cajero: true  },
+  pos_caja_propia:                { admin: true, contador: false, auxiliar: false, ventas: false, cajero: true  },
+  pos_devolucion:                 { admin: true, contador: false, auxiliar: false, ventas: false, cajero: true  },
 } as const satisfies Record<string, Record<Rol, boolean>>;
 
 export type Permiso = keyof typeof MATRIX;
 
 export const NAV_PERMISOS: Record<Rol, string[]> = {
-  admin:    ["dashboard","facturacion","compras","inventario","asientos_contables",
+  admin:    ["dashboard","pos","facturacion","compras","inventario","asientos_contables",
              "caja_bancos","activos_fijos","nomina","reportes_dgi","cierre_periodo",
              "usuarios","configuracion","vet"],
-  contador: ["dashboard","facturacion","compras","inventario","asientos_contables",
+  contador: ["dashboard","pos","facturacion","compras","inventario","asientos_contables",
              "caja_bancos","activos_fijos","reportes_dgi","vet"],
-  auxiliar: ["dashboard","facturacion","compras","inventario","asientos_contables",
+  auxiliar: ["dashboard","pos","facturacion","compras","inventario","asientos_contables",
              "caja_bancos","activos_fijos"],
-  ventas:   ["dashboard","facturacion","cxc","inventario"],
+  ventas:   ["dashboard","pos","facturacion","cxc","inventario"],
+  cajero:   ["dashboard","pos"],
 };
 
 // Módulos editables vía permisos_custom (para el panel de gestión de usuarios)
@@ -83,6 +91,7 @@ export const MODULOS_PERMISOS = [
   { id: "usuarios",            label: "Usuarios",                  tieneEditar: true },
   { id: "configuracion",       label: "Configuración",             tieneEditar: false },
   { id: "vet",                 label: "Cumplimiento VET",          tieneEditar: true },
+  { id: "pos",                 label: "Punto de Venta",            tieneEditar: true },
 ] as const;
 
 // Mapea cada permiso granular al módulo/tipo que permisos_custom puede
@@ -118,6 +127,10 @@ export const PERMISO_A_MODULO: Partial<Record<Permiso, [string, "ver" | "editar"
   configuracion: ["configuracion", "ver"],
   vet_ver: ["vet", "ver"],
   vet_editar: ["vet", "editar"],
+  pos_ver: ["pos", "ver"],
+  pos_vender: ["pos", "editar"],
+  pos_caja_propia: ["pos", "editar"],
+  pos_devolucion: ["pos", "editar"],
 };
 
 export type PermisosCustom = Record<string, { ver?: boolean; editar?: boolean }>;

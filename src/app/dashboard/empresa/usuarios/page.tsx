@@ -20,7 +20,7 @@ interface UsuarioEmpresa {
   email: string | null;
 }
 
-const ROLES: Rol[] = ["admin", "contador", "auxiliar", "ventas"];
+const ROLES: Rol[] = ["admin", "contador", "auxiliar", "ventas", "cajero"];
 
 export default function UsuariosEmpresaPage() {
   const { loading: cargandoPermisos, empresaId, can, rol } = usePermissionsSARA();
