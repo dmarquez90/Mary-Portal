@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
 import { DollarSign, Plus, CheckCircle, ArrowLeft, X } from 'lucide-react'
 import Link from 'next/link'
 
@@ -48,10 +49,11 @@ export default function AnticiposIrPage() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [{ data: en }, { data: ej }] = await Promise.all([
-        supabase.from('empresas_persona_natural').select('id').eq('user_id', user.id).maybeSingle(),
-        supabase.from('empresas_juridicas').select('id').eq('user_id', user.id).maybeSingle(),
-      ])
+      const empresaId = await getEmpresaIdActual(supabase, user.id)
+      const [{ data: en }, { data: ej }] = empresaId ? await Promise.all([
+        supabase.from('empresas_persona_natural').select('id').eq('id', empresaId).maybeSingle(),
+        supabase.from('empresas_juridicas').select('id').eq('id', empresaId).maybeSingle(),
+      ]) : [{ data: null }, { data: null }]
       const eid = en?.id ?? ej?.id ?? ''
       setEmpresaId(eid)
       if (eid) fetchAnticipos(eid, new Date().getFullYear())

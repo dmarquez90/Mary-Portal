@@ -69,15 +69,12 @@ export default function CxCPage() {
   useEffect(() => {
     async function init() {
       const { createClient } = await import('@/lib/supabase/client')
+      const { getEmpresaIdActual } = await import('@/lib/supabase/empresa-actual')
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const [{ data: nat }, { data: jur }] = await Promise.all([
-        supabase.from('empresas_persona_natural').select('id').eq('user_id', user.id).maybeSingle(),
-        supabase.from('empresas_juridicas').select('id').eq('user_id', user.id).maybeSingle(),
-      ])
-      const eid = nat?.id ?? jur?.id ?? ''
+      const eid = await getEmpresaIdActual(supabase, user.id) ?? ''
       setEmpresaId(eid)
 
       if (eid) {

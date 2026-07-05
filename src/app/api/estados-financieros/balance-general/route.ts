@@ -16,12 +16,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Parámetros requeridos: empresa_id, fecha_corte' }, { status: 400 })
     }
 
-    const { data: empresa } = await supabase
-      .from('empresas_juridicas')
-      .select('nombre_empresa, numero_ruc')
-      .eq('id', empresaId)
-      .eq('user_id', user.id)
-      .single()
+    // La RLS de empresas_juridicas/empresas_persona_natural (fn_puede_ver_empresa)
+    // ya solo devuelve la fila si el usuario pertenece a esa empresa vía
+    // empresa_usuarios -- esto cubre tanto al dueño original como a usuarios
+    // invitados (contador, auxiliar, etc.), y ambos tipos de empresa.
+    const [{ data: ej }, { data: en }] = await Promise.all([
+      supabase.from('empresas_juridicas').select('nombre_empresa, numero_ruc').eq('id', empresaId).maybeSingle(),
+      supabase.from('empresas_persona_natural').select('nombre_completo, numero_ruc').eq('id', empresaId).maybeSingle(),
+    ])
+    const empresa = ej
+      ? { nombre_empresa: ej.nombre_empresa, numero_ruc: ej.numero_ruc }
+      : en
+      ? { nombre_empresa: en.nombre_completo, numero_ruc: en.numero_ruc }
+      : null
 
     if (!empresa) return NextResponse.json({ error: 'Sin acceso a esta empresa' }, { status: 403 })
 

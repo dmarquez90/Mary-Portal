@@ -8,13 +8,10 @@
 //   plan_cuentas:       empresa_id, codigo, nombre, tipo, naturaleza, nivel
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
 
 async function getEmpresaId(supabase: any, userId: string): Promise<string | null> {
-  const [{ data: en }, { data: ej }] = await Promise.all([
-    supabase.from('empresas_persona_natural').select('id').eq('user_id', userId).maybeSingle(),
-    supabase.from('empresas_juridicas').select('id').eq('user_id', userId).maybeSingle(),
-  ])
-  return en?.id ?? ej?.id ?? null
+  return getEmpresaIdActual(supabase, userId)
 }
 
 export async function GET(request: Request) {

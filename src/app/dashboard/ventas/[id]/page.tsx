@@ -90,14 +90,11 @@ export default function FacturaDetallePage() {
 
   async function abrirCobro() {
     const { createClient } = await import("@/lib/supabase/client");
+    const { getEmpresaIdActual } = await import("@/lib/supabase/empresa-actual");
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const [{ data: en }, { data: ej }] = await Promise.all([
-      supabase.from("empresas_persona_natural").select("id").eq("user_id", user.id).maybeSingle(),
-      supabase.from("empresas_juridicas").select("id").eq("user_id", user.id).maybeSingle(),
-    ]);
-    const eId = en?.id ?? ej?.id ?? "";
+    const eId = await getEmpresaIdActual(supabase, user.id) ?? "";
     if (eId) {
       const { data: tasas } = await supabase.from("tasa_cambio").select("tasa").eq("empresa_id", eId).order("fecha", { ascending: false }).limit(1);
       if (tasas && tasas.length > 0) setTasaHoy(Number((tasas[0] as {tasa:number}).tasa));
@@ -156,14 +153,16 @@ export default function FacturaDetallePage() {
   useEffect(() => {
     async function load() {
       const { createClient } = await import("@/lib/supabase/client");
+      const { getEmpresaIdActual } = await import("@/lib/supabase/empresa-actual");
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [{ data: en }, { data: ej }] = await Promise.all([
-        supabase.from("empresas_persona_natural").select("nombre_completo,numero_ruc,direccion,telefono,correo_electronico,sitio_web").eq("user_id", user.id).maybeSingle(),
-        supabase.from("empresas_juridicas").select("nombre_empresa,numero_ruc,direccion_legal,correo_electronico,sitio_web").eq("user_id", user.id).maybeSingle(),
-      ]);
+      const empresaIdSesion = await getEmpresaIdActual(supabase, user.id);
+      const [{ data: en }, { data: ej }] = empresaIdSesion ? await Promise.all([
+        supabase.from("empresas_persona_natural").select("nombre_completo,numero_ruc,direccion,telefono,correo_electronico,sitio_web").eq("id", empresaIdSesion).maybeSingle(),
+        supabase.from("empresas_juridicas").select("nombre_empresa,numero_ruc,direccion_legal,correo_electronico,sitio_web").eq("id", empresaIdSesion).maybeSingle(),
+      ]) : [{ data: null }, { data: null }];
       if (en) setEmpresa({ nombre: en.nombre_completo, ruc: en.numero_ruc, direccion: en.direccion, telefono: en.telefono, correo: en.correo_electronico, sitio_web: en.sitio_web });
       if (ej) setEmpresa({ nombre: ej.nombre_empresa, ruc: ej.numero_ruc, direccion: ej.direccion_legal, correo: ej.correo_electronico, sitio_web: ej.sitio_web });
 

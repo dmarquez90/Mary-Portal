@@ -50,14 +50,11 @@ export default function TributacionPage() {
       // del dashboard), no por localStorage — esa llave nunca se guardaba,
       // por lo que este calendario nunca llegaba a cargar datos.
       const { createClient } = await import('@/lib/supabase/client')
+      const { getEmpresaIdActual } = await import('@/lib/supabase/empresa-actual')
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [{ data: en }, { data: ej }] = await Promise.all([
-        supabase.from('empresas_persona_natural').select('id').eq('user_id', user.id).maybeSingle(),
-        supabase.from('empresas_juridicas').select('id').eq('user_id', user.id).maybeSingle(),
-      ])
-      const eid = en?.id ?? ej?.id ?? ''
+      const eid = await getEmpresaIdActual(supabase, user.id) ?? ''
       setEmpresaId(eid)
       if (eid) fetchCalendario(eid, anio, 'pendiente')
     }

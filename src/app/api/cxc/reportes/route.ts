@@ -18,13 +18,15 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Datos de la empresa para el encabezado del reporte ──
+  // RLS (fn_puede_ver_empresa) solo devuelve la fila si el usuario pertenece
+  // a esta empresa vía empresa_usuarios -- cubre dueño original e invitados.
   const [{ data: empN }, { data: empJ }] = await Promise.all([
     supabase.from('empresas_persona_natural')
       .select('nombre_completo, numero_ruc, direccion, telefono, correo_electronico')
-      .eq('user_id', user.id).maybeSingle(),
+      .eq('id', empresaId).maybeSingle(),
     supabase.from('empresas_juridicas')
       .select('nombre_empresa, numero_ruc, direccion_legal, correo_electronico')
-      .eq('user_id', user.id).maybeSingle(),
+      .eq('id', empresaId).maybeSingle(),
   ])
   const empresa = empN
     ? { nombre: empN.nombre_completo, ruc: empN.numero_ruc, direccion: empN.direccion, correo: empN.correo_electronico, telefono: empN.telefono }

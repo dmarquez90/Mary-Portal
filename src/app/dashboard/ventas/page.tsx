@@ -37,16 +37,13 @@ export default function VentasPage() {
 
   const loadData = useCallback(async () => {
     const { createClient } = await import("@/lib/supabase/client");
+    const { getEmpresaIdActual } = await import("@/lib/supabase/empresa-actual");
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: en }, { data: ej }] = await Promise.all([
-      supabase.from("empresas_persona_natural").select("id").eq("user_id", user.id).maybeSingle(),
-      supabase.from("empresas_juridicas").select("id").eq("user_id", user.id).maybeSingle(),
-    ]);
-    const ids = [en?.id, ej?.id].filter(Boolean) as string[];
-    const empresaId = en?.id ?? ej?.id ?? "";
+    const empresaId = await getEmpresaIdActual(supabase, user.id) ?? "";
+    const ids = empresaId ? [empresaId] : [];
 
     const [{ data: facts }, { data: tasas }] = await Promise.all([
       supabase

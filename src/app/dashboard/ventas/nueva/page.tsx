@@ -51,15 +51,12 @@ export default function NuevaFacturaPage() {
   useEffect(() => {
     async function load() {
       const { createClient } = await import("@/lib/supabase/client");
+      const { getEmpresaIdActual } = await import("@/lib/supabase/empresa-actual");
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [{ data: en }, { data: ej }] = await Promise.all([
-        supabase.from("empresas_persona_natural").select("id").eq("user_id", user.id).maybeSingle(),
-        supabase.from("empresas_juridicas").select("id").eq("user_id", user.id).maybeSingle(),
-      ]);
-      const eId = en?.id ?? ej?.id ?? "";
+      const eId = await getEmpresaIdActual(supabase, user.id) ?? "";
       setEmpresaId(eId);
 
       if (eId) {

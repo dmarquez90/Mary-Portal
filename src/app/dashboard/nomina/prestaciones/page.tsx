@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
 import { Gift } from 'lucide-react'
 
 interface Prestacion {
@@ -35,10 +36,7 @@ export default function PrestacionesPage() {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
-      Promise.all([
-        supabase.from('empresas_persona_natural').select('id').eq('user_id', user.id).maybeSingle(),
-        supabase.from('empresas_juridicas').select('id').eq('user_id', user.id).maybeSingle(),
-      ]).then(([n, j]) => setEmpresaId((n.data || j.data)?.id || null))
+      getEmpresaIdActual(supabase, user.id).then(eid => setEmpresaId(eid))
     })
   }, [])
 

@@ -8,15 +8,12 @@ function useEmpresaId() {
   useEffect(() => {
     const load = async () => {
       const { createClient } = await import('@/lib/supabase/client')
+      const { getEmpresaIdActual } = await import('@/lib/supabase/empresa-actual')
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [{ data: en }, { data: ej }] = await Promise.all([
-        supabase.from('empresas_persona_natural').select('id').eq('user_id', user.id).maybeSingle(),
-        supabase.from('empresas_juridicas').select('id').eq('user_id', user.id).maybeSingle(),
-      ])
-      const ids = [en?.id, ej?.id].filter(Boolean) as string[]
-      if (ids.length > 0) setEmpresaId(ids[0])
+      const eid = await getEmpresaIdActual(supabase, user.id)
+      if (eid) setEmpresaId(eid)
     }
     load()
   }, [])

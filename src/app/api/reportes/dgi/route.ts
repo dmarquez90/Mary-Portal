@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getEmpresaIdActual } from "@/lib/supabase/empresa-actual";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -16,10 +17,11 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   // Obtener empresa
-  const [{ data: en }, { data: ej }] = await Promise.all([
-    supabase.from("empresas_persona_natural").select("*").eq("user_id", user.id).single(),
-    supabase.from("empresas_juridicas").select("*").eq("user_id", user.id).single(),
-  ]);
+  const empresaId = await getEmpresaIdActual(supabase, user.id);
+  const [{ data: en }, { data: ej }] = empresaId ? await Promise.all([
+    supabase.from("empresas_persona_natural").select("*").eq("id", empresaId).maybeSingle(),
+    supabase.from("empresas_juridicas").select("*").eq("id", empresaId).maybeSingle(),
+  ]) : [{ data: null }, { data: null }];
 
   const empresa = en ? {
     nombre: en.nombre_completo,

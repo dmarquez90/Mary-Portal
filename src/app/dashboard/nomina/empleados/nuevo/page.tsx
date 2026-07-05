@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
 import { ArrowLeft } from 'lucide-react'
 import ComboCargo from '@/components/nomina/ComboCargo'
 
@@ -41,14 +42,7 @@ export default function NuevoEmpleadoPage() {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
-      Promise.all([
-        supabase.from('empresas_persona_natural').select('id').eq('user_id', user.id).maybeSingle(),
-        supabase.from('empresas_juridicas').select('id').eq('user_id', user.id).maybeSingle(),
-      ]).then(([n, j]) => {
-        const eid = (n.data || j.data)?.id
-        setEmpresaId(eid || null)
-
-      })
+      getEmpresaIdActual(supabase, user.id).then(eid => setEmpresaId(eid))
     })
   }, [])
 

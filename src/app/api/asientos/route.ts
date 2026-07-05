@@ -1,14 +1,11 @@
 // src/app/api/asientos/route.ts
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
 
-// Helper: obtener empresa_id del usuario autenticado
+// Helper: obtener empresa_id del usuario autenticado (dueño o invitado)
 async function getEmpresaId(supabase: any, userId: string): Promise<string | null> {
-  const [{ data: en }, { data: ej }] = await Promise.all([
-    supabase.from('empresas_persona_natural').select('id').eq('user_id', userId).maybeSingle(),
-    supabase.from('empresas_juridicas').select('id').eq('user_id', userId).maybeSingle(),
-  ])
-  return en?.id ?? ej?.id ?? null
+  return getEmpresaIdActual(supabase, userId)
 }
 
 // GET – Listar asientos (Libro Diario)

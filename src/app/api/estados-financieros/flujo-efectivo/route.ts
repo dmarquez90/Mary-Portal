@@ -17,12 +17,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Parámetros requeridos: empresa_id, fecha_inicio, fecha_fin' }, { status: 400 })
     }
 
-    const { data: empresa } = await supabase
-      .from('empresas_juridicas')
-      .select('nombre_empresa, numero_ruc')
-      .eq('id', empresaId)
-      .eq('user_id', user.id)
-      .single()
+    // RLS (fn_puede_ver_empresa) filtra por membresía en empresa_usuarios,
+    // cubriendo dueño original, usuarios invitados y ambos tipos de empresa.
+    const [{ data: ej }, { data: en }] = await Promise.all([
+      supabase.from('empresas_juridicas').select('nombre_empresa, numero_ruc').eq('id', empresaId).maybeSingle(),
+      supabase.from('empresas_persona_natural').select('nombre_completo, numero_ruc').eq('id', empresaId).maybeSingle(),
+    ])
+    const empresa = ej
+      ? { nombre_empresa: ej.nombre_empresa, numero_ruc: ej.numero_ruc }
+      : en
+      ? { nombre_empresa: en.nombre_completo, numero_ruc: en.numero_ruc }
+      : null
 
     if (!empresa) return NextResponse.json({ error: 'Sin acceso a esta empresa' }, { status: 403 })
 

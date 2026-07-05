@@ -30,14 +30,16 @@ function useSupabaseUser() {
 
   const load = useCallback(async () => {
     const { createClient } = await import("@/lib/supabase/client");
+    const { getEmpresaIdActual } = await import("@/lib/supabase/empresa-actual");
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [{ data: en }, { data: ej }] = await Promise.all([
-      supabase.from("empresas_persona_natural").select("*").eq("user_id", user.id).maybeSingle(),
-      supabase.from("empresas_juridicas").select("*").eq("user_id", user.id).maybeSingle(),
-    ]);
+    const eid = await getEmpresaIdActual(supabase, user.id);
+    const [{ data: en }, { data: ej }] = eid ? await Promise.all([
+      supabase.from("empresas_persona_natural").select("*").eq("id", eid).maybeSingle(),
+      supabase.from("empresas_juridicas").select("*").eq("id", eid).maybeSingle(),
+    ]) : [{ data: null }, { data: null }];
     setNatural(en as Record<string, string> | null);
     setJuridica(ej as Record<string, string> | null);
     setEmpresaId((en as any)?.id ?? (ej as any)?.id ?? "");

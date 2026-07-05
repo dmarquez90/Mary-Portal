@@ -216,15 +216,17 @@ export default function CxCReportesPage() {
   useEffect(() => {
     async function init() {
       const { createClient } = await import('@/lib/supabase/client')
+      const { getEmpresaIdActual } = await import('@/lib/supabase/empresa-actual')
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const [{ data: nat }, { data: jur }] = await Promise.all([
-        supabase.from('empresas_persona_natural').select('id, nombre_completo, numero_ruc, direccion, telefono, correo_electronico').eq('user_id', user.id).maybeSingle(),
-        supabase.from('empresas_juridicas').select('id, nombre_empresa, numero_ruc, direccion_legal, correo_electronico').eq('user_id', user.id).maybeSingle(),
-      ])
-      const eid = nat?.id ?? jur?.id ?? ''
+      const eidResuelto = await getEmpresaIdActual(supabase, user.id)
+      const [{ data: nat }, { data: jur }] = eidResuelto ? await Promise.all([
+        supabase.from('empresas_persona_natural').select('id, nombre_completo, numero_ruc, direccion, telefono, correo_electronico').eq('id', eidResuelto).maybeSingle(),
+        supabase.from('empresas_juridicas').select('id, nombre_empresa, numero_ruc, direccion_legal, correo_electronico').eq('id', eidResuelto).maybeSingle(),
+      ]) : [{ data: null }, { data: null }]
+      const eid = eidResuelto ?? ''
       setEmpresaId(eid)
       if (nat) setEmpresa({ nombre: nat.nombre_completo, ruc: nat.numero_ruc, direccion: nat.direccion, correo: nat.correo_electronico, telefono: nat.telefono })
       if (jur) setEmpresa({ nombre: jur.nombre_empresa, ruc: jur.numero_ruc, direccion: jur.direccion_legal, correo: jur.correo_electronico, telefono: undefined })

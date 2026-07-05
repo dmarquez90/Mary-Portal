@@ -56,14 +56,16 @@ export default function CompraDetallePage() {
   useEffect(() => {
     async function load() {
       const { createClient } = await import("@/lib/supabase/client");
+      const { getEmpresaIdActual } = await import("@/lib/supabase/empresa-actual");
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const [{ data: en }, { data: ej }] = await Promise.all([
-        supabase.from("empresas_persona_natural").select("nombre_completo, numero_ruc, direccion, correo_electronico, sitio_web").eq("user_id", user.id).single(),
-        supabase.from("empresas_juridicas").select("nombre_empresa, numero_ruc, direccion_legal, correo_electronico, sitio_web").eq("user_id", user.id).single(),
-      ]);
+      const empresaIdActual = await getEmpresaIdActual(supabase, user.id);
+      const [{ data: en }, { data: ej }] = empresaIdActual ? await Promise.all([
+        supabase.from("empresas_persona_natural").select("nombre_completo, numero_ruc, direccion, correo_electronico, sitio_web").eq("id", empresaIdActual).maybeSingle(),
+        supabase.from("empresas_juridicas").select("nombre_empresa, numero_ruc, direccion_legal, correo_electronico, sitio_web").eq("id", empresaIdActual).maybeSingle(),
+      ]) : [{ data: null }, { data: null }];
 
       if (en) setEmpresa({ nombre: en.nombre_completo, ruc: en.numero_ruc, direccion: en.direccion, correo: en.correo_electronico, sitio_web: en.sitio_web });
       if (ej) setEmpresa({ nombre: ej.nombre_empresa, ruc: ej.numero_ruc, direccion: ej.direccion_legal, correo: ej.correo_electronico, sitio_web: ej.sitio_web });

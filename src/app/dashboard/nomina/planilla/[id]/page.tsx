@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, CheckCircle, Download, FileSpreadsheet } from 'lucide-react'
 import { formatearMes } from '@/lib/nomina/calculos'
 import { createClient } from '@/lib/supabase/client'
+import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
 import * as XLSX from 'xlsx'
 
 interface Detalle {
@@ -63,10 +64,7 @@ export default function DetallePlanillaPage() {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
-      Promise.all([
-        supabase.from('empresas_persona_natural').select('id').eq('user_id', user.id).maybeSingle(),
-        supabase.from('empresas_juridicas').select('id').eq('user_id', user.id).maybeSingle(),
-      ]).then(([n, j]) => setEmpresaId((n.data || j.data)?.id || null))
+      getEmpresaIdActual(supabase, user.id).then(eid => setEmpresaId(eid))
     })
   }, [])
 

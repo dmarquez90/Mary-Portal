@@ -25,6 +25,7 @@ export default function DashboardPage() {
   useEffect(() => {
     async function load() {
       const { createClient } = await import("@/lib/supabase/client");
+      const { getEmpresaIdActual } = await import("@/lib/supabase/empresa-actual");
       const supabase = createClient();
       const { data: { user }, error: userError } = await supabase.auth.getUser();
 
@@ -33,11 +34,13 @@ export default function DashboardPage() {
         return;
       }
 
+      const empresaId = await getEmpresaIdActual(supabase, user.id);
+
       // Buscar empresa - capturar errores explícitamente
-      const [resNatural, resJuridica] = await Promise.all([
-        supabase.from("empresas_persona_natural").select("id, nombre_completo").eq("user_id", user.id).maybeSingle(),
-        supabase.from("empresas_juridicas").select("id, nombre_empresa").eq("user_id", user.id).maybeSingle(),
-      ]);
+      const [resNatural, resJuridica] = empresaId ? await Promise.all([
+        supabase.from("empresas_persona_natural").select("id, nombre_completo").eq("id", empresaId).maybeSingle(),
+        supabase.from("empresas_juridicas").select("id, nombre_empresa").eq("id", empresaId).maybeSingle(),
+      ]) : [{ data: null, error: null }, { data: null, error: null }];
 
       const en = resNatural.data;
       const ej = resJuridica.data;
@@ -47,7 +50,7 @@ export default function DashboardPage() {
       // Debug info visible solo si no encuentra empresa
       if (!en && !ej) {
         setDebugInfo(
-          `user_id buscado: ${user.id} | ` +
+          `usuario: ${user.id} | empresa_id: ${empresaId ?? "sin asignar"} | ` +
           `Error natural: ${errNat?.code} - ${errNat?.message} | ` +
           `Error jurídica: ${errJur?.code} - ${errJur?.message}`
         );
