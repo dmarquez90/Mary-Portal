@@ -48,7 +48,6 @@ const NAV_PRINCIPAL = [
   { href: "/dashboard/ventas",       icon: FileText,        label: "Ventas"        },
 
   { href: "/dashboard/compras",      icon: ShoppingCart,    label: "Compras"       },
-  { href: "/dashboard/caja-bancos",  icon: Landmark,        label: "Caja y Bancos" },
   { href: "/dashboard/tasa-cambio", icon: DollarSign, label: "Tasa de Cambio" },
   { href: "/dashboard/clientes",     icon: Users,           label: "Clientes"      },
   { href: "/dashboard/proveedores",  icon: Truck,           label: "Proveedores"   },
@@ -108,7 +107,7 @@ export default function Sidebar() {
   );
 
   // Permisos del usuario/rol en la empresa activa — controla la visibilidad
-  // de "Usuarios y Roles" (solo quien tenga usuarios_ver debe verlo).
+  // de módulos restringidos (Caja y Bancos, Usuarios y Roles, etc.).
   const { can } = usePermissionsSARA();
 
   async function handleLogout() {
@@ -207,6 +206,9 @@ export default function Sidebar() {
           ))}
           {can("pos_ver") && (
             <NavLink href="/dashboard/pos" icon={Store} label="Punto de Venta" />
+          )}
+          {can("caja_bancos_ver") && (
+            <NavLink href="/dashboard/caja-bancos" icon={Landmark} label="Caja y Bancos" />
           )}
 
           {/* Sección Contabilidad */}
