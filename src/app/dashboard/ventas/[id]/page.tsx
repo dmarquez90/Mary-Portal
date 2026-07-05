@@ -96,8 +96,8 @@ export default function FacturaDetallePage() {
     if (!user) return;
     const eId = await getEmpresaIdActual(supabase, user.id) ?? "";
     if (eId) {
-      const { data: tasas } = await supabase.from("tasa_cambio").select("tasa").eq("empresa_id", eId).order("fecha", { ascending: false }).limit(1);
-      if (tasas && tasas.length > 0) setTasaHoy(Number((tasas[0] as {tasa:number}).tasa));
+      const { data: tasa } = await supabase.rpc("fn_tasa_cambio_vigente", { p_empresa_id: eId });
+      if (tasa) setTasaHoy(Number(tasa));
     }
     const d: Record<number,number> = {};
     [500,200,100,50,20,10,5,1,0.5].forEach(v => { d[v] = 0; });

@@ -19,7 +19,7 @@ interface Linea {
 }
 
 interface CuentaBanco { id: string; nombre: string; banco: string; moneda: string; }
-interface CuentaCaja  { id: string; nombre: string; tipo: string; }
+interface CuentaCaja  { id: string; nombre: string; tipo: string; moneda: string; }
 
 export default function EditarFacturaPage() {
   const router = useRouter();
@@ -45,6 +45,8 @@ export default function EditarFacturaPage() {
   const [cuentasCaja,   setCuentasCaja]   = useState<CuentaCaja[]>([]);
   const [cuentaBancoId, setCuentaBancoId] = useState("");
   const [cuentaCajaId,  setCuentaCajaId]  = useState("");
+  const [tasaCambio,    setTasaCambio]    = useState("");
+  const [estadoOriginal, setEstadoOriginal] = useState("borrador");
 
   function lineaVacia(): Linea {
     return { producto_id: "", descripcion: "", cantidad: 1, precio_unitario: 0, descuento_pct: 0, aplica_iva: true };
@@ -75,6 +77,7 @@ export default function EditarFacturaPage() {
         setFechaVencimiento(fac.fecha_vencimiento ?? "");
         setTipoPago(fac.tipo_pago ?? "contado");
         setNotas(fac.notas ?? "");
+        setEstadoOriginal(fac.estado ?? "borrador");
         if (fac.detalle_facturas?.length) {
           setLineas(fac.detalle_facturas.map((d: any) => ({
             producto_id: d.producto_id ?? "",
@@ -92,7 +95,7 @@ export default function EditarFacturaPage() {
           supabase.from("clientes").select("*").eq("empresa_id", eId).eq("activo", true).order("nombre"),
           supabase.from("productos").select("*").eq("empresa_id", eId).eq("activo", true).order("nombre"),
           supabase.from("cuentas_banco").select("id,nombre,banco,moneda").eq("empresa_id", eId).eq("activa", true).order("created_at"),
-          supabase.from("cuentas_caja").select("id,nombre,tipo").eq("empresa_id", eId).eq("activa", true).order("tipo"),
+          supabase.from("cuentas_caja").select("id,nombre,tipo,moneda").eq("empresa_id", eId).eq("activa", true).order("tipo"),
         ]);
         setClientes((cl as Cliente[]) ?? []);
         setProductos((pr as Producto[]) ?? []);
@@ -109,6 +112,31 @@ export default function EditarFacturaPage() {
     setTipoPago(val);
     if (val !== "credito") setFechaVencimiento("");
   }
+
+  // Una vez que la factura ya fue contabilizada (estado ≠ borrador), el
+  // motor contable ya generó su asiento y su movimiento de caja/banco.
+  // Cambiar la cuenta de cobro o el tipo de pago después de eso no vuelve
+  // a disparar esa contabilización (el trigger solo corre una vez por
+  // factura), así que se bloquea para no desincronizar los datos.
+  const bloqueadoPago = estadoOriginal !== "borrador";
+
+  const monedaCuentaCobro = tipoPago === "contado"
+    ? cuentasCaja.find(c => c.id === cuentaCajaId)?.moneda
+    : (tipoPago === "transferencia" || tipoPago === "cheque" || tipoPago === "tarjeta")
+      ? cuentasBanco.find(c => c.id === cuentaBancoId)?.moneda
+      : undefined;
+  const cuentaCobroEsUSD = monedaCuentaCobro === "USD";
+
+  useEffect(() => {
+    if (bloqueadoPago || !cuentaCobroEsUSD || !empresaId) { return; }
+    (async () => {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data } = await supabase.rpc("fn_tasa_cambio_vigente", { p_empresa_id: empresaId });
+      if (data) setTasaCambio(String(data));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cuentaCobroEsUSD, empresaId, bloqueadoPago]);
 
   function onProductoChange(idx: number, productoId: string) {
     const prod = productos.find(p => p.id === productoId);
@@ -175,6 +203,12 @@ export default function EditarFacturaPage() {
     const cuentaCajaFinal = tipoPago === "contado"
       ? (cuentaCajaId || null) : null;
 
+    if (!bloqueadoPago && cuentaCobroEsUSD && (!tasaCambio || Number(tasaCambio) <= 0)) {
+      toast.error("Ingresa la tasa de cambio para cobrar en una cuenta en dólares.");
+      setSaving(false);
+      return;
+    }
+
     const { data: factura, error } = await supabase.from("facturas").update({
       cliente_id:        (!usarClienteLibre && clienteId) ? clienteId : null,
       cliente_nombre:    nombreCliente,
@@ -189,6 +223,7 @@ export default function EditarFacturaPage() {
       notas:             notas || null,
       cuenta_banco_id:   cuentaBancoFinal,
       cuenta_caja_id:    cuentaCajaFinal,
+      ...(bloqueadoPago ? {} : { tasa_cambio: cuentaCobroEsUSD ? Number(tasaCambio) : null }),
     }).eq("id", facturaId).select().single();
 
     if (error || !factura) {
@@ -282,21 +317,26 @@ export default function EditarFacturaPage() {
 
               <div>
                 <label className="label">Tipo de pago</label>
-                <select className="input" value={tipoPago} onChange={e => handleTipoPago(e.target.value)}>
+                <select className="input" value={tipoPago} disabled={bloqueadoPago} onChange={e => handleTipoPago(e.target.value)}>
                   <option value="contado">Contado (Efectivo)</option>
                   <option value="tarjeta">Tarjeta</option>
                   <option value="transferencia">Transferencia</option>
                   <option value="cheque">Cheque</option>
                   <option value="credito">Crédito</option>
                 </select>
+                {bloqueadoPago && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Esta factura ya fue contabilizada — el tipo de pago y la cuenta no se pueden cambiar.
+                  </p>
+                )}
               </div>
 
               {/* ── Selector de cuenta según tipo de pago ── */}
               {tipoPago === "contado" && cuentasCaja.length > 0 && (
                 <div>
                   <label className="label">Cuenta de caja</label>
-                  <select className="input" value={cuentaCajaId} onChange={e => setCuentaCajaId(e.target.value)}>
-                    {cuentasCaja.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  <select className="input" value={cuentaCajaId} disabled={bloqueadoPago} onChange={e => setCuentaCajaId(e.target.value)}>
+                    {cuentasCaja.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>)}
                   </select>
                 </div>
               )}
@@ -304,11 +344,27 @@ export default function EditarFacturaPage() {
               {(tipoPago === "transferencia" || tipoPago === "cheque" || tipoPago === "tarjeta") && cuentasBanco.length > 0 && (
                 <div>
                   <label className="label">Cuenta bancaria</label>
-                  <select className="input" value={cuentaBancoId} onChange={e => setCuentaBancoId(e.target.value)}>
+                  <select className="input" value={cuentaBancoId} disabled={bloqueadoPago} onChange={e => setCuentaBancoId(e.target.value)}>
                     {cuentasBanco.map(c => (
                       <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {!bloqueadoPago && cuentaCobroEsUSD && (
+                <div className="md:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <label className="label text-amber-800">Tasa de cambio (C$ por US$1)</label>
+                  <input type="number" min="0" step="0.0001" className="input font-mono" placeholder="Ej: 36.6000"
+                    value={tasaCambio} onChange={e => setTasaCambio(e.target.value)} />
+                  <p className="text-xs text-amber-700 mt-1">
+                    Esta cuenta está en dólares. El total de C$ se cobrará como
+                    {" "}
+                    {Number(tasaCambio) > 0
+                      ? `≈ $${(total / Number(tasaCambio)).toFixed(2)} USD`
+                      : "— (ingresa la tasa)"}
+                    .
+                  </p>
                 </div>
               )}
 

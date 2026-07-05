@@ -32,7 +32,9 @@ interface Cheque {
   fecha_vencimiento: string | null; estado: string; notas: string | null
   cuentas_banco?: { nombre: string; banco: string | null; moneda: string }
 }
+interface ResumenParcial { totalNIO: number; totalUSD: number; ingresosMes: number; egresosMes: number }
 interface Resumen {
+  banco: ResumenParcial; caja: ResumenParcial
   totalNIO: number; totalUSD: number; totalCaja: number
   ingresosMes: number; egresosMes: number; chequesPendientes: number
   numCuentasBanco: number; numCajas: number
@@ -49,6 +51,39 @@ function fmtFecha(fecha: string) {
   return new Date(fecha + 'T00:00:00').toLocaleDateString('es-NI', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 const hoy = () => new Date().toISOString().split('T')[0]
+
+// Tarjetas KPI contextuales: cada pestaña mira su propia fuente de datos
+// (banco vs caja), en vez de mostrar siempre el mismo combinado global —
+// antes "Ingresos Mes" solo sumaba transacciones_banco incluso estando
+// parado en la pestaña "Caja", así que una venta en efectivo nunca aparecía.
+function kpisPara(tab: string, r: Resumen) {
+  if (tab === 'caja') {
+    return [
+      { label: 'Total Caja NIO', valor: fmt(r.caja.totalNIO, 'NIO'), color: 'text-gray-900' },
+      { label: 'Total Caja USD', valor: fmt(r.caja.totalUSD, 'USD'), color: 'text-gray-900' },
+      { label: 'Ingresos Mes (Caja)', valor: fmt(r.caja.ingresosMes), color: 'text-green-600' },
+      { label: 'Egresos Mes (Caja)', valor: fmt(r.caja.egresosMes), color: 'text-red-600' },
+      { label: 'Cajas Activas', valor: String(r.numCajas), color: 'text-blue-600' },
+    ]
+  }
+  if (tab === 'bancos' || tab === 'transacciones' || tab === 'cheques') {
+    return [
+      { label: 'Total NIO', valor: fmt(r.banco.totalNIO, 'NIO'), color: 'text-gray-900' },
+      { label: 'Total USD', valor: fmt(r.banco.totalUSD, 'USD'), color: 'text-gray-900' },
+      { label: 'Ingresos Mes (Banco)', valor: fmt(r.banco.ingresosMes), color: 'text-green-600' },
+      { label: 'Egresos Mes (Banco)', valor: fmt(r.banco.egresosMes), color: 'text-red-600' },
+      { label: 'Cheques Pendientes', valor: String(r.chequesPendientes), color: 'text-orange-600' },
+    ]
+  }
+  // 'resumen': combinado banco + caja
+  return [
+    { label: 'Total NIO', valor: fmt(r.totalNIO, 'NIO'), color: 'text-gray-900' },
+    { label: 'Total USD', valor: fmt(r.totalUSD, 'USD'), color: 'text-gray-900' },
+    { label: 'Ingresos Mes', valor: fmt(r.ingresosMes), color: 'text-green-600' },
+    { label: 'Egresos Mes', valor: fmt(r.egresosMes), color: 'text-red-600' },
+    { label: 'Cheques Pendientes', valor: String(r.chequesPendientes), color: 'text-orange-600' },
+  ]
+}
 
 const TIPO_BADGE: Record<string, string> = {
   ingreso:  'bg-green-100 text-green-700',
@@ -311,16 +346,10 @@ export default function CajaBancosPage() {
 
       <AlertasSaldoNegativo />
 
-      {/* Totales */}
+      {/* Totales — contextuales según la pestaña activa */}
       {resumen && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          {[
-            { label: 'Total NIO', valor: fmt(resumen.totalNIO, 'NIO'), color: 'text-gray-900' },
-            { label: 'Total USD', valor: fmt(resumen.totalUSD, 'USD'), color: 'text-gray-900' },
-            { label: 'Ingresos Mes', valor: fmt(resumen.ingresosMes), color: 'text-green-600' },
-            { label: 'Egresos Mes', valor: fmt(resumen.egresosMes), color: 'text-red-600' },
-            { label: 'Cheques Pendientes', valor: String(resumen.chequesPendientes), color: 'text-orange-600' },
-          ].map(s => (
+          {kpisPara(tab, resumen).map(s => (
             <div key={s.label} className="bg-white border border-gray-200 rounded-xl p-3">
               <p className="text-xs text-gray-500 uppercase tracking-wide">{s.label}</p>
               <p className={`text-lg font-bold mt-0.5 ${s.color}`}>{s.valor}</p>

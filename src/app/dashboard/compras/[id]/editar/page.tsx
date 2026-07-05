@@ -18,7 +18,7 @@ interface Linea {
 }
 
 interface CuentaBanco { id: string; nombre: string; banco: string; moneda: string; }
-interface CuentaCaja  { id: string; nombre: string; tipo: string; }
+interface CuentaCaja  { id: string; nombre: string; tipo: string; moneda: string; }
 
 const PROD_FORM_VACIO = {
   codigo: "", nombre: "", unidad_medida: "unidad",
@@ -48,6 +48,8 @@ export default function EditarCompraPage() {
   const [cuentasCaja,     setCuentasCaja]     = useState<CuentaCaja[]>([]);
   const [cuentaBancoId,   setCuentaBancoId]   = useState("");
   const [cuentaCajaId,    setCuentaCajaId]    = useState("");
+  const [tasaCambio,      setTasaCambio]      = useState("");
+  const [estadoOriginal,  setEstadoOriginal]  = useState("borrador");
 
   const [busquedas,       setBusquedas]       = useState<string[]>([""]);
   const [mostrarDropdown, setMostrarDropdown] = useState<number | null>(null);
@@ -85,6 +87,7 @@ export default function EditarCompraPage() {
         setNotas(compra.notas ?? "");
         setCuentaBancoId(compra.cuenta_banco_id ?? "");
         setCuentaCajaId(compra.cuenta_caja_id ?? "");
+        setEstadoOriginal(compra.estado ?? "borrador");
         if (compra.detalle_compras?.length) {
           setLineas(compra.detalle_compras.map((d: any) => ({
             producto_id: d.producto_id ?? "",
@@ -105,7 +108,7 @@ export default function EditarCompraPage() {
           supabase.from("proveedores").select("*").eq("empresa_id", eId).eq("activo", true).order("nombre"),
           supabase.from("productos").select("*").eq("empresa_id", eId).eq("activo", true).order("nombre"),
           supabase.from("cuentas_banco").select("id,nombre,banco,moneda").eq("empresa_id", eId).eq("activa", true).order("created_at"),
-          supabase.from("cuentas_caja").select("id,nombre,tipo").eq("empresa_id", eId).eq("activa", true).order("tipo"),
+          supabase.from("cuentas_caja").select("id,nombre,tipo,moneda").eq("empresa_id", eId).eq("activa", true).order("tipo"),
         ]);
         setProveedores((prov as Proveedor[]) ?? []);
         setProductos((prod as Producto[]) ?? []);
@@ -125,6 +128,31 @@ export default function EditarCompraPage() {
     const prov = proveedores.find(p => p.id === proveedorId);
     setProveedorTipo(prov?.tipo_persona ?? "juridica");
   }, [proveedorId, proveedores]);
+
+  // Una vez que la compra ya fue contabilizada (estado ≠ borrador), el
+  // motor contable ya generó su asiento y su movimiento de caja/banco.
+  // Cambiar la cuenta de pago o el tipo de pago después de eso no vuelve
+  // a disparar esa contabilización (el trigger solo corre una vez por
+  // compra), así que se bloquea para no desincronizar los datos.
+  const bloqueadoPago = estadoOriginal !== "borrador";
+
+  const monedaCuentaPago = tipoPago === "contado"
+    ? cuentasCaja.find(c => c.id === cuentaCajaId)?.moneda
+    : (tipoPago === "transferencia" || tipoPago === "cheque" || tipoPago === "tarjeta")
+      ? cuentasBanco.find(c => c.id === cuentaBancoId)?.moneda
+      : undefined;
+  const cuentaPagoEsUSD = monedaCuentaPago === "USD";
+
+  useEffect(() => {
+    if (bloqueadoPago || !cuentaPagoEsUSD || !empresaId) { return; }
+    (async () => {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data } = await supabase.rpc("fn_tasa_cambio_vigente", { p_empresa_id: empresaId });
+      if (data) setTasaCambio(String(data));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cuentaPagoEsUSD, empresaId, bloqueadoPago]);
 
   function productosFiltrados(idx: number) {
     const b = busquedas[idx]?.toLowerCase() ?? "";
@@ -248,6 +276,12 @@ export default function EditarCompraPage() {
     const cuentaBancoFinal = tipoPago !== "contado" && tipoPago !== "credito" ? (cuentaBancoId || null) : null;
     const cuentaCajaFinal  = tipoPago === "contado" ? (cuentaCajaId || null) : null;
 
+    if (!bloqueadoPago && cuentaPagoEsUSD && (!tasaCambio || Number(tasaCambio) <= 0)) {
+      toast.error("Ingresa la tasa de cambio para pagar desde una cuenta en dólares.");
+      setSaving(false);
+      return;
+    }
+
     const { data: compra, error } = await supabase.from("compras").update({
       proveedor_id:   proveedorId || null,
       fecha_compra:   fechaCompra,
@@ -260,6 +294,7 @@ export default function EditarCompraPage() {
       total_a_pagar:  totalPagar,
       cuenta_banco_id: cuentaBancoFinal,
       cuenta_caja_id:  cuentaCajaFinal,
+      ...(bloqueadoPago ? {} : { tasa_cambio: cuentaPagoEsUSD ? Number(tasaCambio) : null }),
       notas: [notas, numFacturaProveedor ? `Factura proveedor: ${numFacturaProveedor}` : ""].filter(Boolean).join(" | ") || null,
     }).eq("id", compraId).select().single();
 
@@ -342,22 +377,27 @@ export default function EditarCompraPage() {
 
               <div>
                 <label className="label">Tipo de pago</label>
-                <select className="input" value={tipoPago} onChange={e => setTipoPago(e.target.value)}>
+                <select className="input" value={tipoPago} disabled={bloqueadoPago} onChange={e => setTipoPago(e.target.value)}>
                   <option value="contado">Contado (Efectivo)</option>
                   <option value="tarjeta">Tarjeta</option>
                   <option value="transferencia">Transferencia</option>
                   <option value="cheque">Cheque</option>
                   <option value="credito">Crédito</option>
                 </select>
+                {bloqueadoPago && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Esta compra ya fue contabilizada — el tipo de pago y la cuenta no se pueden cambiar.
+                  </p>
+                )}
               </div>
 
               {/* ── Selector de cuenta según tipo de pago ── */}
               {tipoPago === "contado" && cuentasCaja.length > 0 && (
                 <div>
                   <label className="label">Cuenta de caja</label>
-                  <select className="input" value={cuentaCajaId} onChange={e => setCuentaCajaId(e.target.value)}>
+                  <select className="input" value={cuentaCajaId} disabled={bloqueadoPago} onChange={e => setCuentaCajaId(e.target.value)}>
                     {cuentasCaja.map(c => (
-                      <option key={c.id} value={c.id}>{c.nombre}</option>
+                      <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>
                     ))}
                   </select>
                 </div>
@@ -366,11 +406,27 @@ export default function EditarCompraPage() {
               {(tipoPago === "transferencia" || tipoPago === "cheque" || tipoPago === "tarjeta") && cuentasBanco.length > 0 && (
                 <div>
                   <label className="label">Cuenta bancaria</label>
-                  <select className="input" value={cuentaBancoId} onChange={e => setCuentaBancoId(e.target.value)}>
+                  <select className="input" value={cuentaBancoId} disabled={bloqueadoPago} onChange={e => setCuentaBancoId(e.target.value)}>
                     {cuentasBanco.map(c => (
                       <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {!bloqueadoPago && cuentaPagoEsUSD && (
+                <div className="md:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <label className="label text-amber-800">Tasa de cambio (C$ por US$1)</label>
+                  <input type="number" min="0" step="0.0001" className="input font-mono" placeholder="Ej: 36.6000"
+                    value={tasaCambio} onChange={e => setTasaCambio(e.target.value)} />
+                  <p className="text-xs text-amber-700 mt-1">
+                    Esta cuenta está en dólares. El total de C$ se pagará como
+                    {" "}
+                    {Number(tasaCambio) > 0
+                      ? `≈ $${(total / Number(tasaCambio)).toFixed(2)} USD`
+                      : "— (ingresa la tasa)"}
+                    .
+                  </p>
                 </div>
               )}
 

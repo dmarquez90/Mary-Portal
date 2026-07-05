@@ -94,10 +94,10 @@ export default function ArqueoCajaPage() {
     const eId = await getEmpresaIdActual(supabase, user.id) ?? "";
     setEmpresaId(eId);
 
-    const [{ data: cts }, { data: sess }, { data: tasas }] = await Promise.all([
+    const [{ data: cts }, { data: sess }, { data: tasa }] = await Promise.all([
       supabase.from("cuentas_caja").select("id,nombre,tipo,saldo_actual").eq("empresa_id", eId).eq("activa", true),
       supabase.from("sesiones_caja").select("*").eq("empresa_id", eId).order("fecha_apertura", { ascending: false }).limit(20),
-      supabase.from("tasa_cambio").select("tasa").eq("empresa_id", eId).order("fecha", { ascending: false }).limit(1),
+      supabase.rpc("fn_tasa_cambio_vigente", { p_empresa_id: eId }),
     ]);
 
     setCuentas((cts as CuentaCaja[]) ?? []);
@@ -105,7 +105,7 @@ export default function ArqueoCajaPage() {
     const activa = (sess as SesionCaja[] ?? []).find(s => s.estado === "abierta") ?? null;
     setSesionActiva(activa);
     if (cts && cts.length > 0 && !cuentaSelId) setCuentaSelId((cts[0] as CuentaCaja).id);
-    if (tasas && tasas.length > 0) setTasaHoy(Number((tasas[0] as { tasa: number }).tasa));
+    if (tasa) setTasaHoy(Number(tasa));
     setLoading(false);
   }, [cuentaSelId]);
 

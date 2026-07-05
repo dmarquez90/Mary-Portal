@@ -19,7 +19,7 @@ interface Linea {
 }
 
 interface CuentaBanco { id: string; nombre: string; banco: string; moneda: string; }
-interface CuentaCaja  { id: string; nombre: string; tipo: string; }
+interface CuentaCaja  { id: string; nombre: string; tipo: string; moneda: string; }
 
 export default function NuevaFacturaPage() {
   const router = useRouter();
@@ -43,6 +43,7 @@ export default function NuevaFacturaPage() {
   const [cuentasCaja,   setCuentasCaja]   = useState<CuentaCaja[]>([]);
   const [cuentaBancoId, setCuentaBancoId] = useState("");
   const [cuentaCajaId,  setCuentaCajaId]  = useState("");
+  const [tasaCambio,    setTasaCambio]    = useState("");
 
   function lineaVacia(): Linea {
     return { producto_id: "", descripcion: "", cantidad: 1, precio_unitario: 0, descuento_pct: 0, aplica_iva: true };
@@ -64,7 +65,7 @@ export default function NuevaFacturaPage() {
           supabase.from("clientes").select("*").eq("empresa_id", eId).eq("activo", true).order("nombre"),
           supabase.from("productos").select("*").eq("empresa_id", eId).eq("activo", true).order("nombre"),
           supabase.from("cuentas_banco").select("id,nombre,banco,moneda").eq("empresa_id", eId).eq("activa", true).order("created_at"),
-          supabase.from("cuentas_caja").select("id,nombre,tipo").eq("empresa_id", eId).eq("activa", true).order("tipo"),
+          supabase.from("cuentas_caja").select("id,nombre,tipo,moneda").eq("empresa_id", eId).eq("activa", true).order("tipo"),
         ]);
         setClientes((cl as Cliente[]) ?? []);
         setProductos((pr as Producto[]) ?? []);
@@ -85,6 +86,29 @@ export default function NuevaFacturaPage() {
     setTipoPago(val);
     if (val !== "credito") setFechaVencimiento("");
   }
+
+  // ── Moneda de la cuenta de cobro elegida ──────────────────────
+  // El total de la factura siempre está en córdobas (NIO); si la
+  // cuenta elegida es en USD, el trigger fn_contabilizar_factura
+  // convierte el lado operativo (movimientos_caja/transacciones_banco)
+  // con esta tasa. Se precarga la tasa vigente pero es editable.
+  const monedaCuentaCobro = tipoPago === "contado"
+    ? cuentasCaja.find(c => c.id === cuentaCajaId)?.moneda
+    : (tipoPago === "transferencia" || tipoPago === "cheque" || tipoPago === "tarjeta")
+      ? cuentasBanco.find(c => c.id === cuentaBancoId)?.moneda
+      : undefined;
+  const cuentaCobroEsUSD = monedaCuentaCobro === "USD";
+
+  useEffect(() => {
+    if (!cuentaCobroEsUSD || !empresaId) { setTasaCambio(""); return; }
+    (async () => {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data } = await supabase.rpc("fn_tasa_cambio_vigente", { p_empresa_id: empresaId });
+      if (data) setTasaCambio(String(data));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cuentaCobroEsUSD, empresaId]);
 
   function onProductoChange(idx: number, productoId: string) {
     const prod = productos.find(p => p.id === productoId);
@@ -167,6 +191,12 @@ export default function NuevaFacturaPage() {
       ? (cuentaCajaId || null)
       : null;
 
+    if (cuentaCobroEsUSD && (!tasaCambio || Number(tasaCambio) <= 0)) {
+      toast.error("Ingresa la tasa de cambio para cobrar en una cuenta en dólares.");
+      setSaving(false);
+      return;
+    }
+
     // ── Insertar cabecera de la factura ───────────────────
     const { data: factura, error } = await supabase.from("facturas").insert({
       empresa_id:        empresaId,
@@ -184,6 +214,7 @@ export default function NuevaFacturaPage() {
       notas:             notas || null,
       cuenta_banco_id:   cuentaBancoFinal,
       cuenta_caja_id:    cuentaCajaFinal,
+      tasa_cambio:       cuentaCobroEsUSD ? Number(tasaCambio) : null,
     }).select().single();
 
     if (error || !factura) {
@@ -291,11 +322,14 @@ export default function NuevaFacturaPage() {
               </div>
 
               {/* ── Selector de cuenta según tipo de pago ── */}
+              {/* El total de la factura siempre está en córdobas (NIO); si la
+                  cuenta elegida es en USD, el sistema convierte el cobro a
+                  dólares con la tasa de cambio (ver campo debajo). */}
               {tipoPago === "contado" && cuentasCaja.length > 0 && (
                 <div>
                   <label className="label">Cuenta de caja</label>
                   <select className="input" value={cuentaCajaId} onChange={e => setCuentaCajaId(e.target.value)}>
-                    {cuentasCaja.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                    {cuentasCaja.map(c => <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>)}
                   </select>
                 </div>
               )}
@@ -304,13 +338,26 @@ export default function NuevaFacturaPage() {
                 <div>
                   <label className="label">Cuenta bancaria</label>
                   <select className="input" value={cuentaBancoId} onChange={e => setCuentaBancoId(e.target.value)}>
-                    {/* El total de la factura se calcula en córdobas (NIO), así que
-                        solo se listan cuentas en esa moneda para evitar depositar
-                        un monto en córdobas en una cuenta en dólares. */}
-                    {cuentasBanco.filter(c => c.moneda === "NIO").map(c => (
+                    {cuentasBanco.map(c => (
                       <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {cuentaCobroEsUSD && (
+                <div className="md:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <label className="label text-amber-800">Tasa de cambio (C$ por US$1)</label>
+                  <input type="number" min="0" step="0.0001" className="input font-mono" placeholder="Ej: 36.6000"
+                    value={tasaCambio} onChange={e => setTasaCambio(e.target.value)} />
+                  <p className="text-xs text-amber-700 mt-1">
+                    Esta cuenta está en dólares. El total de C$ se cobrará como
+                    {" "}
+                    {Number(tasaCambio) > 0
+                      ? `≈ $${(total / Number(tasaCambio)).toFixed(2)} USD`
+                      : "— (ingresa la tasa)"}
+                    .
+                  </p>
                 </div>
               )}
 
