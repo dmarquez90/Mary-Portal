@@ -83,6 +83,11 @@ function TabEmpresa({
   const [correoJur,       setCorreoJur]       = useState(juridica?.correo_electronico ?? "");
   const [webJur,          setWebJur]          = useState(juridica?.sitio_web ?? "");
 
+  // Común a ambos tipos de empresa: tasa INSS patronal (Decreto 06-2019)
+  const [inssPatronal, setInssPatronal] = useState(
+    (natural?.inss_patronal_tasa ?? juridica?.inss_patronal_tasa ?? "0.225").toString()
+  );
+
   const [loading, setLoading] = useState(false);
 
   async function guardar() {
@@ -100,6 +105,7 @@ function TabEmpresa({
         direccion_legal:            direccionLegal,
         correo_electronico:         correoJur,
         sitio_web:                  webJur || null,
+        inss_patronal_tasa:         Number(inssPatronal),
         updated_at:                 new Date().toISOString(),
       }).eq("id", empresa.id);
       if (error) { toast.error("Error: " + error.message); setLoading(false); return; }
@@ -114,6 +120,7 @@ function TabEmpresa({
         telefono,
         correo_electronico: correoNat,
         sitio_web:          webNat || null,
+        inss_patronal_tasa: Number(inssPatronal),
         updated_at:         new Date().toISOString(),
       }).eq("id", empresa.id);
       if (error) { toast.error("Error: " + error.message); setLoading(false); return; }
@@ -244,6 +251,24 @@ function TabEmpresa({
           </div>
         </div>
       )}
+
+      {/* Parámetros de nómina */}
+      <div className="pt-4 border-t border-slate-100">
+        <p className="text-sm font-semibold text-slate-700 mb-3">Parámetros de nómina</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="label">Tasa INSS patronal (régimen integral)</label>
+            <select className="input" value={inssPatronal} onChange={e => setInssPatronal(e.target.value)}>
+              <option value="0.215">21.5% — menos de 50 empleados</option>
+              <option value="0.225">22.5% — 50 empleados o más</option>
+            </select>
+            <p className="text-xs text-slate-400 mt-1">
+              Decreto 06-2019, reforma al reglamento de la Ley 539 de Seguridad Social.
+              Se aplica al calcular nuevas planillas.
+            </p>
+          </div>
+        </div>
+      </div>
 
       <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
         <button onClick={guardar} disabled={loading} className="btn-primary flex items-center gap-2">

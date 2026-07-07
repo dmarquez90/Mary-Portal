@@ -7,6 +7,7 @@ import { ArrowLeft, Printer, FileX, Check, Package, AlertTriangle, Banknote, Plu
 import Link from "next/link";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { imprimirTicket } from "@/lib/impresion/ticket";
 
 // ── Tipos ─────────────────────────────────────────────────────
 interface DetalleFactura {
@@ -373,42 +374,28 @@ export default function FacturaDetallePage() {
 
   function handlePrintTicket(ancho: 58 | 80 = 80) {
     if (!factura || !empresa) return;
-    const nombreCliente = factura.cliente?.nombre ?? factura.cliente_nombre ?? "Consumidor final";
-    const anchoMM = ancho === 58 ? "56mm" : "78mm";
-    const cw = ancho === 58 ? 28 : 38;
-    const sep = (c = "-") => `<div style="text-align:center;font-size:11px;margin:3px 0">${c.repeat(cw)}</div>`;
-    const items2 = (factura.detalles ?? []).map(d => {
-      const desc = d.descripcion.length > cw ? d.descripcion.slice(0, cw - 2) + ".." : d.descripcion;
-      return `<div style="font-size:12px;font-weight:bold;margin-top:3px">${desc}</div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;padding-left:8px">
-        <span>${d.cantidad} x ${formatCurrency(d.precio_unitario)}</span><span><b>${formatCurrency(d.total)}</b></span></div>
-      ${d.iva > 0 ? `<div style="font-size:10px;color:#444;padding-left:8px">IVA: ${formatCurrency(d.iva)}</div>` : ""}`;
-    }).join(sep("·"));
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Ticket</title>
-    <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:12px;width:${anchoMM};margin:0 auto;padding:4px 3px}
-    @page{size:${ancho}mm auto;margin:2mm 3mm}</style></head><body>
-    <div style="text-align:center;font-size:16px;font-weight:bold">${empresa.nombre}</div>
-    <div style="text-align:center;font-size:12px">RUC: ${empresa.ruc}</div>
-    ${sep("=")}
-    <div style="text-align:center;font-size:16px;font-weight:bold">${factura.numero_factura}</div>
-    <div style="text-align:center">${formatDate(factura.fecha_emision)} · ${factura.tipo_pago}</div>
-    ${sep("=")}
-    <div style="font-size:10px;font-weight:bold">CLIENTE</div>
-    <div style="font-weight:bold">${nombreCliente}</div>
-    ${sep()}
-    <div style="display:flex;justify-content:space-between;font-weight:bold"><span>DESCRIPCION</span><span>TOTAL</span></div>
-    ${sep()}${items2}${sep("=")}
-    <div style="display:flex;justify-content:space-between"><span>Subtotal:</span><span>${formatCurrency(factura.subtotal)}</span></div>
-    <div style="display:flex;justify-content:space-between"><span>IVA (15%):</span><span>${formatCurrency(factura.iva_total)}</span></div>
-    ${sep("=")}
-    <div style="font-size:18px;font-weight:bold;text-align:center">TOTAL: ${formatCurrency(factura.total)}</div>
-    ${sep("=")}
-    <div style="text-align:center;font-size:10px">¡Gracias por su compra!</div>
-    <div style="text-align:center;font-size:10px">Generado por SARA · Nicaragua</div>
-    <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}</script>
-    </body></html>`;
-    const w = window.open("", "_blank", "width=420,height=700");
-    if (w) { w.document.write(html); w.document.close(); }
+    imprimirTicket(
+      { nombre: empresa.nombre, ruc: empresa.ruc, direccion: empresa.direccion, telefono: empresa.telefono },
+      {
+        numeroFactura: factura.numero_factura,
+        fecha: formatDate(factura.fecha_emision),
+        tipoPago: factura.tipo_pago,
+        cliente: factura.cliente?.nombre ?? factura.cliente_nombre ?? "Consumidor final",
+        items: (factura.detalles ?? []).map(d => ({
+          descripcion: d.descripcion,
+          cantidad: d.cantidad,
+          precio_unitario: d.precio_unitario,
+          iva: d.iva,
+          total: d.total,
+        })),
+        subtotal: Number(factura.subtotal),
+        ivaTotal: Number(factura.iva_total),
+        total: Number(factura.total),
+        montoRecibido: factura.monto_recibido != null ? Number(factura.monto_recibido) : null,
+        cambio: factura.cambio_entregado != null ? Number(factura.cambio_entregado) : null,
+      },
+      ancho
+    );
   }
 
   // ── Render ────────────────────────────────────────────────

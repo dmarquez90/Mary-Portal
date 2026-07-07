@@ -60,6 +60,7 @@ const NAV_CONTABILIDAD = [
   { href: "/dashboard/contabilidad/plan-cuentas", icon: BookText,       label: "Plan de Cuentas"   },
   { href: "/dashboard/contabilidad/mayor",        icon: BookOpen,       label: "Libro Mayor"       },
   { href: "/dashboard/contabilidad/balance",      icon: TrendingUp,     label: "Balance"           },
+  { href: "/dashboard/estados-financieros",       icon: FileBarChart2,  label: "Estados Financieros" },
 ];
 
 const NAV_NOMINA = [
@@ -78,6 +79,7 @@ const NAV_TRIBUTACION = [
   { href: "/dashboard/tributacion/ir-anual",         icon: FileText,     label: "IR Anual — F106"       },
   { href: "/dashboard/tributacion/anticipos-ir",     icon: DollarSign,   label: "Anticipos IR"          },
   { href: "/dashboard/tributacion/imi",              icon: Building2,    label: "IMI Municipal"         },
+  { href: "/dashboard/tributacion/isc",              icon: Banknote,     label: "ISC"                   },
   { href: "/dashboard/tributacion/retenciones",      icon: FileBarChart2,label: "Retenciones Definitivas"},
 ];
 
@@ -208,7 +210,10 @@ export default function Sidebar() {
             <NavLink href="/dashboard/pos" icon={Store} label="Punto de Venta" />
           )}
           {can("caja_bancos_ver") && (
-            <NavLink href="/dashboard/caja-bancos" icon={Landmark} label="Caja y Bancos" />
+            <>
+              <NavLink href="/dashboard/caja-bancos" icon={Landmark} label="Caja y Bancos" />
+              <NavLink href="/dashboard/caja-bancos/arqueos" icon={Calculator} label="Arqueos de Caja" />
+            </>
           )}
 
           {/* Sección Contabilidad */}
@@ -232,26 +237,29 @@ export default function Sidebar() {
             )}
           </div>
 
-          {/* Sección Nómina */}
-          <div className="pt-2">
-            <p className="text-xs font-semibold text-blue-400/60 uppercase tracking-wider px-3 mb-2">
-              Nómina
-            </p>
-            <SectionToggle
-              label="Nómina y Planilla"
-              icon={CalendarDays}
-              isOpen={nominaOpen}
-              onToggle={() => setNominaOpen(!nominaOpen)}
-              basePath="/dashboard/nomina"
-            />
-            {nominaOpen && (
-              <div className="ml-4 mt-1 space-y-1 border-l border-white/10 pl-3">
-                {NAV_NOMINA.map(({ href, icon, label }) => (
-                  <NavLink key={href} href={href} icon={icon} label={label} />
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Sección Nómina — restringida por matriz de permisos (solo admin
+              por defecto; los datos salariales son sensibles) */}
+          {can("nomina_ver") && (
+            <div className="pt-2">
+              <p className="text-xs font-semibold text-blue-400/60 uppercase tracking-wider px-3 mb-2">
+                Nómina
+              </p>
+              <SectionToggle
+                label="Nómina y Planilla"
+                icon={CalendarDays}
+                isOpen={nominaOpen}
+                onToggle={() => setNominaOpen(!nominaOpen)}
+                basePath="/dashboard/nomina"
+              />
+              {nominaOpen && (
+                <div className="ml-4 mt-1 space-y-1 border-l border-white/10 pl-3">
+                  {NAV_NOMINA.map(({ href, icon, label }) => (
+                    <NavLink key={href} href={href} icon={icon} label={label} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Activos Fijos */}
           <div className="pt-2">
@@ -314,7 +322,12 @@ export default function Sidebar() {
             {can("usuarios_ver") && (
               <NavLink href="/dashboard/empresa/usuarios" icon={UserCog} label="Usuarios y Roles" />
             )}
-            <NavLink href="/dashboard/configuracion" icon={Settings} label="Configuración" />
+            {can("configuracion") && (
+              <>
+                <NavLink href="/dashboard/empresa" icon={Building2} label="Mi Empresa" />
+                <NavLink href="/dashboard/configuracion" icon={Settings} label="Configuración" />
+              </>
+            )}
           </div>
 
         </nav>

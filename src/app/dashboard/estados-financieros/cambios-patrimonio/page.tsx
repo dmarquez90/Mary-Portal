@@ -1,5 +1,5 @@
 'use client'
-// src/app/estados-financieros/cambios-patrimonio/page.tsx
+// src/app/dashboard/estados-financieros/cambios-patrimonio/page.tsx
 // SARA - Estado de Cambios en el Patrimonio
 // NIIF PYMES Sección 6 | Código de Comercio Nicaragua
 

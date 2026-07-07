@@ -215,7 +215,7 @@ export async function crearAsientoPlanilla(
 
   // ── DÉBITOS ────────────────────────────────────────────────
   add(COD_NOMINA.SUELDOS,           p.total_salarios_brutos,    0, `Planilla sueldos ${per}`)
-  add(COD_NOMINA.INSS_PATRONAL_GTO, p.total_inss_patronal,      0, `INSS Patronal 22.5% — ${per}`)
+  add(COD_NOMINA.INSS_PATRONAL_GTO, p.total_inss_patronal,      0, `INSS Patronal — ${per}`)
   add(COD_NOMINA.INATEC_GTO,        p.total_inatec,             0, `INATEC 2% — ${per}`)
 
   if (p.total_prov_vacaciones    > 0) add(COD_NOMINA.VACACIONES_GTO,    p.total_prov_vacaciones,    0, `Prov. vacaciones ${per}`)
@@ -225,7 +225,7 @@ export async function crearAsientoPlanilla(
   // ── CRÉDITOS ───────────────────────────────────────────────
   add(COD_NOMINA.SUELDOS_POR_PAGAR, 0, p.total_neto_pagar,         `Neto a pagar empleados ${per}`)
   add(COD_NOMINA.INSS_LABORAL_PP,   0, p.total_inss_laboral,       `INSS Laboral 7% retenido ${per}`)
-  add(COD_NOMINA.INSS_PATRONAL_PP,  0, p.total_inss_patronal,      `INSS Patronal 22.5% por enterar ${per}`)
+  add(COD_NOMINA.INSS_PATRONAL_PP,  0, p.total_inss_patronal,      `INSS Patronal por enterar ${per}`)
   add(COD_NOMINA.INATEC_PP,         0, p.total_inatec,             `INATEC 2% por enterar ${per}`)
 
   if (p.total_ir_laboral         > 0) add(COD_NOMINA.IR_LABORAL_PP,     0, p.total_ir_laboral,         `IR Laboral retenido ${per}`)

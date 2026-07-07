@@ -31,8 +31,9 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Rutas protegidas
-  if (pathname.startsWith("/dashboard") && !user) {
+  // Rutas protegidas: requieren sesión activa
+  const rutasProtegidas = ["/dashboard", "/super-admin"];
+  if (rutasProtegidas.some((r) => pathname.startsWith(r)) && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     return NextResponse.redirect(url);

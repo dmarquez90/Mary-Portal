@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { calcularEstadoResultados } from '@/lib/estados-financieros'
+import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,6 +11,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const empresaId = searchParams.get('empresa_id')
+      || await getEmpresaIdActual(supabase, user.id)
     const fechaInicio = searchParams.get('fecha_inicio')
     const fechaFin = searchParams.get('fecha_fin')
     const comparativo = searchParams.get('comparativo') === 'true'
@@ -76,14 +78,17 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const body = await req.json()
-    const { empresa_id, fecha_inicio, fecha_fin, notas } = body
+    const { fecha_inicio, fecha_fin, notas } = body
+    const empresa_id = body.empresa_id
+      || await getEmpresaIdActual(supabase, user.id)
+    if (!empresa_id) return NextResponse.json({ error: 'Sin empresa activa' }, { status: 400 })
 
     const resultado = await calcularEstadoResultados(
       supabase, empresa_id, new Date(fecha_inicio), new Date(fecha_fin)
     )
 
     const { data, error } = await supabase
-      .from('estados_financieros')
+      .from('estados_financieros_guardados')
       .insert({
         empresa_id,
         tipo_estado: 'estado_resultados',

@@ -1,5 +1,5 @@
 'use client'
-// src/app/estados-financieros/flujo-efectivo/page.tsx
+// src/app/dashboard/estados-financieros/flujo-efectivo/page.tsx
 // SARA - Estado de Flujo de Efectivo (Método Indirecto)
 // NIIF PYMES Sección 7
 

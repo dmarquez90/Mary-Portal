@@ -111,6 +111,10 @@ export interface InputEmpleadoPlanilla {
   prestamosInss:       number
   otrosDescuentos:     number
   regimenInss:         'integral' | 'ivm_rp' | 'facultativo'
+  // Tasa patronal del régimen integral configurada por empresa
+  // (0.215 si <50 empleados, 0.225 si >=50 — Decreto 06-2019).
+  // Si se omite, se usa TASAS_NOMINA.INSS_PATRONAL (22.5%).
+  tasaInssPatronal?:   number
   // Para IR acumulado:
   mesActual:           number
   acumBrutoAnteriores: number
@@ -177,10 +181,11 @@ export function calcularEmpleadoPlanilla(
   }
   // Facultativo: no aplica descuento al empleado en planilla
 
-  // 4. INSS Patronal (22.5%) — gasto de la empresa
+  // 4. INSS Patronal (21.5% o 22.5% según tamaño de la empresa) — gasto de la empresa
   let inssPatronal = 0
   if (input.regimenInss === 'integral') {
-    inssPatronal = round2(baseCalculo * TASAS_NOMINA.INSS_PATRONAL)
+    const tasaPatronal = input.tasaInssPatronal ?? TASAS_NOMINA.INSS_PATRONAL
+    inssPatronal = round2(baseCalculo * tasaPatronal)
   } else if (input.regimenInss === 'ivm_rp') {
     inssPatronal = round2(baseCalculo * 0.165) // IVM-RP patronal
   }

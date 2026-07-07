@@ -1,5 +1,5 @@
 'use client'
-// src/app/estados-financieros/estado-resultados/page.tsx
+// src/app/dashboard/estados-financieros/estado-resultados/page.tsx
 // SARA - Estado de Resultados (Pérdidas y Ganancias)
 // NIIF PYMES Sección 5 | LCT Art. 43-54
 
