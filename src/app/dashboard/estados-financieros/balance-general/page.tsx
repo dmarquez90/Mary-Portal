@@ -1,5 +1,5 @@
 'use client'
-// src/app/estados-financieros/balance-general/page.tsx
+// src/app/dashboard/estados-financieros/balance-general/page.tsx
 // SARA - Balance General (Estado de Situación Financiera)
 // NIIF PYMES Sección 4 | LCT Nicaragua
 

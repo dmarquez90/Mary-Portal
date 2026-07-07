@@ -22,7 +22,6 @@ interface DatosReporte { ventas?: VentaRow[]; compras?: CompraRow[]; empresa: { 
 const THIN = { style: "thin", color: { rgb: "CBD5E0" } };
 const BORDER = { top: THIN, bottom: THIN, left: THIN, right: THIN };
 const S_HDR = { font: { bold: true, color: { rgb: "FFFFFF" }, sz: 10, name: "Calibri" }, fill: { patternType: "solid", fgColor: { rgb: "1B3A5C" } }, alignment: { horizontal: "center", vertical: "center" }, border: BORDER };
-const S_SUBHDR = { font: { bold: true, sz: 10, name: "Calibri" }, fill: { patternType: "solid", fgColor: { rgb: "2E6DA4" }, }, alignment: { horizontal: "left", vertical: "center" }, border: BORDER };
 const S_EVEN = { font: { sz: 9, name: "Calibri" }, fill: { patternType: "solid", fgColor: { rgb: "EBF5FB" } }, alignment: { vertical: "center" }, border: BORDER };
 const S_ODD  = { font: { sz: 9, name: "Calibri" }, fill: { patternType: "solid", fgColor: { rgb: "FFFFFF" } }, alignment: { vertical: "center" }, border: BORDER };
 const S_TOT  = { font: { bold: true, sz: 9, name: "Calibri" }, fill: { patternType: "solid", fgColor: { rgb: "D4E6F1" } }, alignment: { horizontal: "right", vertical: "center" }, border: BORDER };
@@ -48,13 +47,14 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
   const compras = datos.compras ?? [];
 
   if (tipo === "ingresos" || tipo === "ventas") {
-    const baseIVA   = ventas.reduce((s, v) => s + v.subtotal, 0);
-    const totalBruto = ventas.reduce((s, v) => s + v.total, 0);
+    // Mismos criterios que el Excel: sin IVA = exenta; bases SIN impuesto
+    const gravadas = ventas.filter(v => v.iva_total > 0).reduce((s, v) => s + v.subtotal, 0);
+    const exentas  = ventas.filter(v => v.iva_total === 0).reduce((s, v) => s + v.subtotal, 0);
     const resumen = [
-      ["Base Imponible para IVA",           baseIVA],
-      ["Ingresos gravados del mes (15%)",   baseIVA],
-      ["Base Imponible PMD / Anticipo",     totalBruto],
-      ["Ingresos brutos del mes",           totalBruto],
+      ["Ingresos gravados del mes (15%)",   gravadas],
+      ["Ingresos del mes exentos",          exentas],
+      ["Base Imponible PMD / Anticipo",     gravadas + exentas],
+      ["Ingresos brutos del mes",           gravadas + exentas],
     ];
     return (
       <div className="space-y-5">
@@ -103,20 +103,22 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
   }
 
   if (tipo === "credito") {
+    // Igual que el Excel: solo compras con IVA acreditable
+    const conIVA = compras.filter(c => c.iva_total > 0);
     return (
       <div>
-        <p className="text-xs text-slate-500 mb-3">Crédito Fiscal IVA — Renglón 105</p>
+        <p className="text-xs text-slate-500 mb-3">Crédito Fiscal IVA — Renglón 105 · Solo compras con IVA</p>
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-xs">
             <thead><tr className="bg-purple-800 text-white">
               {["RUC","Nombre / Razón Social","N° Documento","Fecha","Sin IVA","IVA","Renglón"].map(h => <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}
             </tr></thead>
             <tbody>
-              {compras.length === 0
+              {conIVA.length === 0
                 ? <tr><td colSpan={7} className="text-center py-6 text-slate-400">Sin compras con IVA en este período</td></tr>
-                : compras.map((c, i) => {
+                : conIVA.map((c, i) => {
                     const fp = c.fecha_compra?.split("-") ?? [];
-                    const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0].slice(2)}` : c.fecha_compra;
+                    const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
                     return (
                       <tr key={i} className={i % 2 === 0 ? "bg-purple-50" : "bg-white"}>
                         <td className="px-3 py-1.5 font-mono">{c.proveedor_ruc}</td>
@@ -129,11 +131,11 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
                       </tr>
                     );
                   })}
-              {compras.length > 0 && (
+              {conIVA.length > 0 && (
                 <tr className="bg-purple-100 font-semibold">
                   <td colSpan={4} className="px-3 py-2 text-right text-xs text-slate-600">TOTALES</td>
-                  <td className="px-3 py-2 text-right">{formatCurrency(compras.reduce((s,c)=>s+c.subtotal,0))}</td>
-                  <td className="px-3 py-2 text-right text-purple-700">{formatCurrency(compras.reduce((s,c)=>s+c.iva_total,0))}</td>
+                  <td className="px-3 py-2 text-right">{formatCurrency(conIVA.reduce((s,c)=>s+c.subtotal,0))}</td>
+                  <td className="px-3 py-2 text-right text-purple-700">{formatCurrency(conIVA.reduce((s,c)=>s+c.iva_total,0))}</td>
                   <td />
                 </tr>
               )}
@@ -159,7 +161,7 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
                 ? <tr><td colSpan={7} className="text-center py-6 text-slate-400">Sin compras a personas naturales en este período</td></tr>
                 : naturales.map((c, i) => {
                     const fp = c.fecha_compra?.split("-") ?? [];
-                    const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0].slice(2)}` : c.fecha_compra;
+                    const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
                     const ir = +(c.subtotal * 0.02).toFixed(2);
                     return (
                       <tr key={i} className={i % 2 === 0 ? "bg-amber-50" : "bg-white"}>
@@ -208,9 +210,9 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
                         <td className="px-3 py-1.5 font-mono">{v.numero_factura}</td>
                         <td className="px-3 py-1.5 max-w-[140px] truncate">{v.cliente_nombre}</td>
                         <td className="px-3 py-1.5 font-mono text-xs">{v.cliente_ruc}</td>
-                        <td className="px-3 py-1.5 text-right">{formatCurrency(v.subtotal)}</td>
+                        <td className="px-3 py-1.5 text-right">{formatCurrency(v.iva_total > 0 ? v.subtotal : 0)}</td>
                         <td className="px-3 py-1.5 text-right text-green-700">{formatCurrency(v.iva_total)}</td>
-                        <td className="px-3 py-1.5 text-right">C$0.00</td>
+                        <td className="px-3 py-1.5 text-right">{formatCurrency(v.iva_total > 0 ? 0 : v.subtotal)}</td>
                         <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(v.total)}</td>
                       </tr>
                     );
@@ -218,9 +220,9 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
               {ventas.length > 0 && (
                 <tr className="bg-green-100 font-semibold">
                   <td colSpan={4} className="px-3 py-2 text-right text-xs text-slate-600">TOTALES</td>
-                  <td className="px-3 py-2 text-right">{formatCurrency(ventas.reduce((s,v)=>s+v.subtotal,0))}</td>
+                  <td className="px-3 py-2 text-right">{formatCurrency(ventas.reduce((s,v)=>s+(v.iva_total > 0 ? v.subtotal : 0),0))}</td>
                   <td className="px-3 py-2 text-right text-green-700">{formatCurrency(ventas.reduce((s,v)=>s+v.iva_total,0))}</td>
-                  <td className="px-3 py-2 text-right">C$0.00</td>
+                  <td className="px-3 py-2 text-right">{formatCurrency(ventas.reduce((s,v)=>s+(v.iva_total > 0 ? 0 : v.subtotal),0))}</td>
                   <td className="px-3 py-2 text-right">{formatCurrency(ventas.reduce((s,v)=>s+v.total,0))}</td>
                 </tr>
               )}
@@ -353,7 +355,7 @@ export default function ReportesPage() {
     try {
       const datos = datosExternos ?? await fetchDatos(tipo);
       const XLSX = await import("xlsx-js-style" as string) as typeof import("xlsx");
-      const wb = XLSX.utils.book_new();
+      let wb = XLSX.utils.book_new();
       const mesNombre = nombreMes(datos.mes ?? mesSeleccionado);
       const empresa = datos.empresa?.nombre ?? "SARA ERP";
 
@@ -379,74 +381,81 @@ export default function ReportesPage() {
 
       if (tipo === "ingresos" || tipo === "ventas") {
         const ventas = datos.ventas ?? [];
-        const subtotal = ventas.reduce((s,v) => s + v.subtotal, 0);
-        const total    = ventas.reduce((s,v) => s + v.total, 0);
+        // Clasificación fiscal: una factura sin IVA es venta exenta; la base
+        // del PMD/Anticipo son los ingresos brutos SIN IVA (art. 63 LCT) —
+        // nunca el total facturado con impuesto.
+        const gravadas = ventas.filter(v => v.iva_total > 0).reduce((s,v) => s + v.subtotal, 0);
+        const exentas  = ventas.filter(v => v.iva_total === 0).reduce((s,v) => s + v.subtotal, 0);
+        const brutosSinIVA = gravadas + exentas;
 
-        const wsData: (string | number)[][] = [
-          ["Concepto", "1.- Valor de Ingresos mensuales"],
-          ["Base Imponible para determinar el IVA", subtotal],
-          ["Ingresos gravados del mes (tasa 15%)", subtotal],
-          ["Ingresos del mes por distribución de energía eléctrica subsidiada (tasa 7%)", 0],
-          ["Ingresos por exportación de bienes tangibles", 0],
-          ["Ingresos por exportación de bienes intangibles", 0],
-          ["Ingresos del mes exentos", 0],
-          ["Ingresos del mes exonerados", 0],
-          ["Base Imponible para determinar ISC", 0],
-          ["Ingresos por enajenación de productos derivados del petróleo", 0],
-          ["Ingresos por enajenación de azúcar", 0],
-          ["Ingreso por enajenación de bienes de la Industria Fiscal", 0],
-          ["Ingresos por enajenación de otros bienes de Fabricación Nacional", 0],
-          ["Ingresos por enajenación de bienes importados de la Industria Fiscal", 0],
-          ["Ingresos por exportación de bienes gravados con tasa 0%", 0],
-          ["Base gravable de ISC-IMI para empresas generadoras de energía eléctrica", 0],
-          ["Base Gravable de ISC-IMI para empresas distribuidoras de energía eléctrica", 0],
-          ["Ingresos por operaciones exoneradas", 0],
-          ["Base Imponible para determinar PMD o Anticipo", total],
-          ["Ingresos brutos del mes", total],
-          ["Total Ingreso por margen de comercialización", 0],
-          ["Utilidades del mes", 0],
-          ["Base Imponible para determinar impuesto Casino", 0],
-          ["Total máquinas de juegos", 0],
-          ["Cantidad de mesas de juego", 0],
-          ["Sucursales", "Factura inicial", "Factura final", "Serie"],
-        ];
+        // Se parte de la plantilla OFICIAL de la DGI (copiada sin modificar
+        // desde dgi.gob.ni a public/plantillas-vet) y solo se llenan las
+        // celdas de valores: los textos, hojas y estructura quedan idénticos
+        // a lo que la VET espera, incluidos sus espacios internos.
+        const respPlantilla = await fetch("/plantillas-vet/dgi-planilla-ingresos-dmi-v2.xlsx");
+        if (!respPlantilla.ok) throw new Error("No se encontró la plantilla oficial en /plantillas-vet");
+        wb = XLSX.read(await respPlantilla.arrayBuffer(), { type: "array", cellStyles: true });
+        const ws1 = wb.Sheets["Con 25 filas y Datos de Factura"];
+        if (!ws1) throw new Error("La plantilla oficial no tiene la hoja esperada");
 
-        if (ventas.length > 0) {
-          const nums = ventas.map(v => v.numero_factura).sort();
-          const serie = nums[0].includes("-") ? nums[0].split("-")[0] : "";
-          wsData.push([empresa, nums[0], nums[nums.length - 1], serie]);
+        // Valores de la columna B (filas 2-25 de la plantilla oficial)
+        const valores: Record<string, number> = {
+          B2:  gravadas,      // Base Imponible para determinar el IVA
+          B3:  gravadas,      // Ingresos gravados del mes (tasa 15%)
+          B4:  0,             // Energía eléctrica subsidiada (tasa 7%)
+          B5:  0,             // Exportación de bienes tangibles
+          B6:  0,             // Exportación de bienes intangibles
+          B7:  exentas,       // Ingresos del mes exentos
+          B8:  0,             // Ingresos del mes exonerados
+          B9:  0,             // Base Imponible para determinar ISC
+          B10: 0, B11: 0, B12: 0, B13: 0, B14: 0, B15: 0, B16: 0, B17: 0, B18: 0,
+          B19: brutosSinIVA,  // Base Imponible para determinar PMD o Anticipo
+          B20: brutosSinIVA,  // Ingresos brutos del mes
+          B21: 0,             // Margen de comercialización
+          B22: 0,             // Utilidades del mes
+          B23: 0,             // Base impuesto Casino
+          B24: 0,             // Total máquinas de juegos
+          B25: 0,             // Cantidad de mesas de juego
+        };
+        for (const [celda, valor] of Object.entries(valores)) {
+          XLSX.utils.sheet_add_aoa(ws1, [[valor]], { origin: celda });
         }
-        for (let i = 0; i < 4; i++) wsData.push(["", "", "", ""]);
 
-        const ws1 = XLSX.utils.aoa_to_sheet(wsData);
-        ws1["!cols"] = [{ wch: 55 }, { wch: 22 }, { wch: 22 }, { wch: 22 }];
-        // Style header rows (row 0 = "Concepto", row 25 = "Sucursales")
-        const hdrStyle = S_HDR;
-        const subHdr = S_SUBHDR;
-        const range1 = XLSX.utils.decode_range(ws1["!ref"] as string);
-        for (let R = range1.s.r; R <= range1.e.r; R++) {
-          for (let C = range1.s.c; C <= range1.e.c; C++) {
-            const addr = XLSX.utils.encode_cell({ r: R, c: C });
-            const cell = (ws1 as Record<string, Record<string, unknown>>)[addr];
-            if (!cell) continue;
-            if (R === 0 || R === 25) cell.s = hdrStyle;
-            else if (R === 26) cell.s = subHdr;
-            else cell.s = R % 2 === 0 ? S_ODD : S_EVEN;
+        // Rango de facturas por serie (desde la fila 27, bajo el encabezado
+        // "Sucursales" de la fila 26): el número puede venir como "F-000123";
+        // agrupar por prefijo de serie y tomar min/max numérico, no
+        // lexicográfico (evita que "F-000010" quede antes que "F-000009").
+        if (ventas.length > 0) {
+          const porSerie = new Map<string, { min: string; max: string; minN: number; maxN: number }>();
+          for (const v of ventas) {
+            const num = v.numero_factura ?? "";
+            const serie = num.includes("-") ? num.split("-")[0] : "";
+            const n = parseInt(num.replace(/\D/g, ""), 10) || 0;
+            const actual = porSerie.get(serie);
+            if (!actual) porSerie.set(serie, { min: num, max: num, minN: n, maxN: n });
+            else {
+              if (n < actual.minN) { actual.min = num; actual.minN = n; }
+              if (n > actual.maxN) { actual.max = num; actual.maxN = n; }
+            }
+          }
+          let fila = 27;
+          for (const [serie, r] of porSerie) {
+            XLSX.utils.sheet_add_aoa(ws1, [[empresa, r.min, r.max, serie]], { origin: `A${fila}` });
+            fila++;
           }
         }
-        XLSX.utils.book_append_sheet(wb, ws1, "Con 25 filas y Datos de Factura");
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[]]), "Hoja1");
 
       } else if (tipo === "credito") {
         const compras = datos.compras ?? [];
         const headers = ["Numero RUC","Nombre y Apellido o Razon Social","Numero Documento","Descripcion del Pago","Fecha de Emision de Documento","Ingreso sin IVA","Monto IVA Trasladado","Codigo Renglon"];
-        const rows = compras.map(c => {
+        // Solo compras que efectivamente traen IVA acreditable; la guía DMI
+        // exige fecha dd/mm/aaaa y prohíbe filas de totales en la planilla.
+        const rows = compras.filter(c => c.iva_total > 0).map(c => {
           const fp = c.fecha_compra?.split("-") ?? [];
-          const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0].slice(2)}` : c.fecha_compra;
+          const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
           return [c.proveedor_ruc, c.proveedor_nombre, c.numero_factura_proveedor ?? c.numero_compra, "Compra de bienes y servicios", fecha, c.subtotal, c.iva_total, "105"];
         });
-        const totalRow = ["", "TOTAL", "", "", "", compras.reduce((s,c)=>s+c.subtotal,0), compras.reduce((s,c)=>s+c.iva_total,0), ""];
-        const ws2 = XLSX.utils.aoa_to_sheet([headers, ...rows, totalRow]);
+        const ws2 = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         ws2["!cols"] = [{ wch: 18 },{ wch: 35 },{ wch: 20 },{ wch: 30 },{ wch: 20 },{ wch: 16 },{ wch: 16 },{ wch: 12 }];
         applyStyles(ws2 as Record<string, unknown>, 0, 8);
         XLSX.utils.book_append_sheet(wb, ws2, "CREDITO FISCAL IVA");
@@ -456,7 +465,7 @@ export default function ReportesPage() {
         const headers = ["No. RUC","NOMBRE Y APELLIDOS Ó RAZÓN SOCIAL","INGRESOS BRUTOS MENSUALES","VALOR COTIZACIÓN INSS","VALOR FONDO PENSIONES AHORRO","NÚMERO DE DOCUMENTO","FECHA DE DOCUMENTO","BASE IMPONIBLE","VALOR RETENIDO","ALÍCUOTA DE RETENCIÓN","CÓDIGO DE RETENCIÓN"];
         const rows = compras.filter(c => c.tipo_proveedor === "natural").map(c => {
           const fp = c.fecha_compra?.split("-") ?? [];
-          const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0].slice(2)}` : c.fecha_compra;
+          const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
           return [c.proveedor_ruc, c.proveedor_nombre, c.subtotal, 0, 0, c.numero_factura_proveedor ?? c.numero_compra, fecha, c.subtotal, +(c.subtotal * 0.02).toFixed(2), "2%", "22"];
         });
         const ws3 = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -469,12 +478,19 @@ export default function ReportesPage() {
         const headers = ["Fecha","N° Factura","Cliente","RUC / Cédula","Valor Gravable","IVA 15%","Exento","Total Factura"];
         const titleRow = [`Libro de Ventas — ${empresa}`, "", "", "", "", "", "", ""];
         const subtitleRow = [`Período: ${mesNombre} ${datos.anio ?? anioSeleccionado}`, "", "", "", "", "", "", ""];
+        // Facturas sin IVA se reportan en la columna Exento, no como gravables
         const rows = ventas.map(v => {
           const fp = v.fecha_emision?.split("-") ?? [];
           const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : v.fecha_emision;
-          return [fecha, v.numero_factura, v.cliente_nombre, v.cliente_ruc, v.subtotal, v.iva_total, 0, v.total];
+          const gravable = v.iva_total > 0 ? v.subtotal : 0;
+          const exento   = v.iva_total > 0 ? 0 : v.subtotal;
+          return [fecha, v.numero_factura, v.cliente_nombre, v.cliente_ruc, gravable, v.iva_total, exento, v.total];
         });
-        const totalRow = ["", "", "", "TOTAL", ventas.reduce((s,v)=>s+v.subtotal,0), ventas.reduce((s,v)=>s+v.iva_total,0), 0, ventas.reduce((s,v)=>s+v.total,0)];
+        const totalRow = ["", "", "", "TOTAL",
+          ventas.reduce((s,v)=>s+(v.iva_total > 0 ? v.subtotal : 0),0),
+          ventas.reduce((s,v)=>s+v.iva_total,0),
+          ventas.reduce((s,v)=>s+(v.iva_total > 0 ? 0 : v.subtotal),0),
+          ventas.reduce((s,v)=>s+v.total,0)];
         const ws4 = XLSX.utils.aoa_to_sheet([titleRow, subtitleRow, headers, ...rows, totalRow]);
         ws4["!cols"] = [{ wch: 12 },{ wch: 14 },{ wch: 32 },{ wch: 18 },{ wch: 16 },{ wch: 14 },{ wch: 12 },{ wch: 16 }];
         ws4["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } }];
@@ -517,7 +533,7 @@ export default function ReportesPage() {
   const anios = [new Date().getFullYear(), new Date().getFullYear() - 1];
 
   const VET_REPORTES = [
-    { tipo: "ingresos",    label: "Planilla de Ingresos",     desc: "DMI-V2.0 · Ventas gravadas 15% · Ingresos brutos",  hdr: "bg-blue-700",   icon: "📊" },
+    { tipo: "ingresos",    label: "Planilla de Ingresos",     desc: "DMI v2.1 · Gravadas 15%, exentas y rangos de factura por serie",  hdr: "bg-blue-700",   icon: "📊" },
     { tipo: "credito",     label: "Crédito Fiscal IVA",       desc: "Compras con IVA acreditable · Renglón 105",          hdr: "bg-purple-700", icon: "🧾" },
     { tipo: "retenciones", label: "Retenciones en la Fuente", desc: "IR 2% sobre compras a personas naturales · Cód. 22", hdr: "bg-amber-700",  icon: "📋" },
   ];
@@ -600,7 +616,7 @@ export default function ReportesPage() {
       <div className="mb-8">
         <h1 className="font-display text-2xl font-bold text-slate-900">Reportes DGI</h1>
         <p className="text-slate-500 text-sm mt-1">
-          Reportes compatibles con la Ventanilla Electrónica Tributaria (VET) — DMI v2.0
+          Reportes compatibles con la Ventanilla Electrónica Tributaria (VET) — DMI v2.1
         </p>
       </div>
 
@@ -628,7 +644,9 @@ export default function ReportesPage() {
       {/* Reportes VET */}
       <div className="mb-8">
         <h2 className="font-display text-lg font-bold text-slate-900 mb-1">Archivos para subir al VET</h2>
-        <p className="text-slate-500 text-xs mb-4">Formato exacto DMI v2.0 — Súbelos directamente en dgienlinea.dgi.gob.ni</p>
+        <p className="text-slate-500 text-xs mb-4">
+          Formato de carga DMI v2.1 — Verifica el primer archivo contra tu plantilla oficial de la VET antes de declararlo en dgienlinea.dgi.gob.ni
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {VET_REPORTES.map(r => <ReporteCard key={r.tipo} {...r} />)}
         </div>

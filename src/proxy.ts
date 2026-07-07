@@ -1,8 +1,10 @@
-﻿import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
-export async function middleware(request: NextRequest) {
-  // No correr en rutas de API - ellas manejan auth por su cuenta
+// Convención "proxy" de Next 16 (reemplaza a "middleware").
+// Única fuente de verdad para la protección de rutas por sesión.
+export async function proxy(request: NextRequest) {
+  // Las rutas de API manejan su propia autenticación (401 JSON, no redirect)
   if (request.nextUrl.pathname.startsWith("/api/")) {
     return NextResponse.next();
   }

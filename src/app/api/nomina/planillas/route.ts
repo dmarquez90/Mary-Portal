@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import {
   calcularEmpleadoPlanilla,
 } from '@/lib/nomina/calculos'
+import { getTasaInssPatronal } from '@/lib/nomina/empresa-config'
 import { crearAsientoPlanilla } from '@/lib/nomina/asientos'
 
 export async function GET(req: NextRequest) {
@@ -63,8 +64,11 @@ export async function POST(req: NextRequest) {
     total_prov_indemnizacion: 0,
   }
 
+  const tasaInssPatronal = await getTasaInssPatronal(supabase, empresa_id)
+
   const detallesCalculados = detalles.map((d: any) => {
     const resultado = calcularEmpleadoPlanilla({
+      tasaInssPatronal,
       empleadoId:          d.empleado_id,
       salarioBase:         d.salario_base,
       diasTrabajados:      d.dias_trabajados ?? 30,

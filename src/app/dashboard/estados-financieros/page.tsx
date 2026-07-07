@@ -1,5 +1,5 @@
 'use client'
-// src/app/estados-financieros/page.tsx
+// src/app/dashboard/estados-financieros/page.tsx
 // SARA - Hub de Estados Financieros
 // Módulo 3 - Fase 3
 
@@ -7,7 +7,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
   BarChart3, TrendingUp, Scale, ArrowLeftRight, FileText,
-  Calendar, ChevronRight, Download, BookOpen
+  Calendar, ChevronRight, BookOpen
 } from 'lucide-react'
 
 const ESTADOS = [
@@ -21,7 +21,7 @@ const ESTADOS = [
     color: 'text-emerald-600',
     bg: 'bg-emerald-50',
     borde: 'border-emerald-200',
-    href: '/estados-financieros/estado-resultados',
+    href: '/dashboard/estados-financieros/estado-resultados',
   },
   {
     id: 'balance-general',
@@ -33,7 +33,7 @@ const ESTADOS = [
     color: 'text-blue-600',
     bg: 'bg-blue-50',
     borde: 'border-blue-200',
-    href: '/estados-financieros/balance-general',
+    href: '/dashboard/estados-financieros/balance-general',
   },
   {
     id: 'flujo-efectivo',
@@ -45,7 +45,7 @@ const ESTADOS = [
     color: 'text-purple-600',
     bg: 'bg-purple-50',
     borde: 'border-purple-200',
-    href: '/estados-financieros/flujo-efectivo',
+    href: '/dashboard/estados-financieros/flujo-efectivo',
   },
   {
     id: 'cambios-patrimonio',
@@ -57,20 +57,23 @@ const ESTADOS = [
     color: 'text-orange-600',
     bg: 'bg-orange-50',
     borde: 'border-orange-200',
-    href: '/estados-financieros/cambios-patrimonio',
+    href: '/dashboard/estados-financieros/cambios-patrimonio',
   },
 ]
 
+// Períodos rápidos relativos al año en curso (período fiscal calendario,
+// art. 50 LCT: 1 de enero al 31 de diciembre)
+const ANIO_ACTUAL = new Date().getFullYear()
 const PERIODOS_RAPIDOS = [
-  { label: 'Enero - Diciembre 2024', inicio: '2024-01-01', fin: '2024-12-31' },
-  { label: 'Enero - Junio 2024', inicio: '2024-01-01', fin: '2024-06-30' },
-  { label: 'Julio - Diciembre 2024', inicio: '2024-07-01', fin: '2024-12-31' },
-  { label: 'Enero - Diciembre 2023', inicio: '2023-01-01', fin: '2023-12-31' },
+  { label: `Enero - Diciembre ${ANIO_ACTUAL}`, inicio: `${ANIO_ACTUAL}-01-01`, fin: `${ANIO_ACTUAL}-12-31` },
+  { label: `Enero - Junio ${ANIO_ACTUAL}`, inicio: `${ANIO_ACTUAL}-01-01`, fin: `${ANIO_ACTUAL}-06-30` },
+  { label: `Julio - Diciembre ${ANIO_ACTUAL}`, inicio: `${ANIO_ACTUAL}-07-01`, fin: `${ANIO_ACTUAL}-12-31` },
+  { label: `Enero - Diciembre ${ANIO_ACTUAL - 1}`, inicio: `${ANIO_ACTUAL - 1}-01-01`, fin: `${ANIO_ACTUAL - 1}-12-31` },
 ]
 
 export default function EstadosFinancierosPage() {
-  const [periodoInicio, setPeriodoInicio] = useState('2024-01-01')
-  const [periodoFin, setPeriodoFin] = useState('2024-12-31')
+  const [periodoInicio, setPeriodoInicio] = useState(`${ANIO_ACTUAL}-01-01`)
+  const [periodoFin, setPeriodoFin] = useState(`${ANIO_ACTUAL}-12-31`)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -87,7 +90,7 @@ export default function EstadosFinancierosPage() {
             </p>
           </div>
           <Link
-            href="/estados-financieros/historial"
+            href="/dashboard/estados-financieros/historial"
             className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
           >
             <FileText size={15} />

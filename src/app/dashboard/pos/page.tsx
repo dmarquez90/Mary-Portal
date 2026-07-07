@@ -6,10 +6,11 @@ import Link from "next/link";
 import { toast } from "sonner";
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, LockOpen, Lock,
-  Banknote, DollarSign, Undo2, X, CheckCircle2,
+  Banknote, DollarSign, Undo2, X, CheckCircle2, Printer,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { IVA_NICARAGUA } from "@/types";
+import { imprimirTicket, type TicketDatos, type TicketEmpresa } from "@/lib/impresion/ticket";
 
 interface ProductoPOS {
   id: string; nombre: string; codigo: string; codigo_barra: string | null;
@@ -58,6 +59,9 @@ export default function PosPage() {
   const [montoApertura, setMontoApertura] = useState("");
   const [abriendo, setAbriendo] = useState(false);
 
+  const [empresaTicket, setEmpresaTicket] = useState<TicketEmpresa | null>(null);
+  const [ultimaVenta, setUltimaVenta] = useState<TicketDatos | null>(null);
+
   const [showCierre, setShowCierre] = useState(false);
   const [denomsNio, setDenomsNio] = useState<Record<string, number>>({});
   const [denomsUsd, setDenomsUsd] = useState<Record<string, number>>({});
@@ -76,6 +80,14 @@ export default function PosPage() {
     const eId = await getEmpresaIdActual(supabase, user.id) ?? "";
     setEmpresaId(eId);
     if (!eId) { setLoading(false); return; }
+
+    // Datos fiscales de la empresa para el encabezado del ticket
+    const [{ data: en }, { data: ej }] = await Promise.all([
+      supabase.from("empresas_persona_natural").select("nombre_completo,numero_ruc,direccion,telefono").eq("id", eId).maybeSingle(),
+      supabase.from("empresas_juridicas").select("nombre_empresa,numero_ruc,direccion_legal").eq("id", eId).maybeSingle(),
+    ]);
+    if (en) setEmpresaTicket({ nombre: en.nombre_completo, ruc: en.numero_ruc, direccion: en.direccion, telefono: en.telefono });
+    else if (ej) setEmpresaTicket({ nombre: ej.nombre_empresa, ruc: ej.numero_ruc, direccion: ej.direccion_legal });
 
     const { data, error } = await supabase.rpc("fn_pos_estado_inicial", { p_empresa_id: eId });
     if (error) {
@@ -205,6 +217,29 @@ export default function PosPage() {
         (data.cambio != null ? ` · Cambio: ${formatCurrency(data.cambio)}` : ""),
         { duration: 6000 }
       );
+      // Snapshot para el ticket antes de vaciar el carrito
+      setUltimaVenta({
+        numeroFactura: data.numero_factura,
+        fecha: new Date().toLocaleDateString("es-NI", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        tipoPago: tipoPago === "contado" ? "Efectivo" : tipoPago,
+        cliente: cliente?.nombre ?? "Consumidor final",
+        items: carrito.map(i => {
+          const sub = i.cantidad * i.precio_unitario;
+          const iva = i.aplica_iva ? sub * IVA_NICARAGUA : 0;
+          return {
+            descripcion: i.descripcion,
+            cantidad: i.cantidad,
+            precio_unitario: i.precio_unitario,
+            iva,
+            total: sub + iva,
+          };
+        }),
+        subtotal: Number(data.subtotal),
+        ivaTotal: Number(data.iva_total),
+        total: Number(data.total),
+        montoRecibido: data.monto_recibido != null ? Number(data.monto_recibido) : null,
+        cambio: data.cambio != null ? Number(data.cambio) : null,
+      });
       setCarrito([]);
       setClienteId("");
       setMontoRecibido("");
@@ -411,6 +446,47 @@ export default function PosPage() {
           </div>
         </div>
       </div>
+
+      {/* ── MODAL VENTA EXITOSA / IMPRIMIR TICKET ─────────── */}
+      {ultimaVenta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
+            <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <CheckCircle2 className="w-7 h-7 text-green-600" />
+            </div>
+            <h2 className="font-display text-lg font-bold text-slate-900">Venta registrada</h2>
+            <p className="text-slate-500 text-sm mt-1">{ultimaVenta.numeroFactura}</p>
+            <p className="font-mono font-bold text-2xl text-slate-900 mt-2">{formatCurrency(ultimaVenta.total)}</p>
+            {ultimaVenta.cambio != null && ultimaVenta.cambio > 0 && (
+              <p className="text-green-700 font-semibold text-sm mt-1">
+                Cambio a entregar: {formatCurrency(ultimaVenta.cambio)}
+              </p>
+            )}
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => empresaTicket && imprimirTicket(empresaTicket, ultimaVenta, 58)}
+                disabled={!empresaTicket}
+                className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm disabled:opacity-40"
+              >
+                <Printer className="w-4 h-4" /> 58mm
+              </button>
+              <button
+                onClick={() => empresaTicket && imprimirTicket(empresaTicket, ultimaVenta, 80)}
+                disabled={!empresaTicket}
+                className="flex-1 btn-primary flex items-center justify-center gap-2 text-sm disabled:opacity-40"
+              >
+                <Printer className="w-4 h-4" /> Ticket 80mm
+              </button>
+            </div>
+            <button
+              onClick={() => setUltimaVenta(null)}
+              className="w-full mt-3 text-slate-500 hover:text-slate-700 text-sm font-medium py-2"
+            >
+              Continuar sin imprimir
+            </button>
+          </div>
+        </div>
+      )}
 
       {showCierre && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-4 py-6 overflow-y-auto">

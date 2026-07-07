@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getSaldoCuentas } from '@/lib/estados-financieros'
+import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,6 +11,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const empresaId = searchParams.get('empresa_id')
+      || await getEmpresaIdActual(supabase, user.id)
     const fechaInicio = searchParams.get('fecha_inicio')
     const fechaFin = searchParams.get('fecha_fin')
 

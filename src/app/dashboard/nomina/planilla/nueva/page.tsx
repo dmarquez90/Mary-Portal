@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
 import { ArrowLeft, Calculator } from 'lucide-react'
 import { calcularEmpleadoPlanilla } from '@/lib/nomina/calculos'
+import { getTasaInssPatronal } from '@/lib/nomina/empresa-config'
 
 interface Empleado {
   id: string
@@ -101,6 +102,9 @@ export default function NuevaPlanillaPage() {
     if (!empresaId) return
     const supabase = createClient()
 
+    // Tasa INSS patronal configurada por la empresa (21.5% / 22.5%)
+    const tasaInssPatronal = await getTasaInssPatronal(supabase, empresaId)
+
     // Traer acumulados IR reales de meses anteriores al período seleccionado
     const { data: acums } = await supabase
       .from('ir_laboral_acumulado')
@@ -123,6 +127,7 @@ export default function NuevaPlanillaPage() {
     const filasCalc = filas.map(f => {
       const ac = acumMap[f.empleado_id] ?? { acumBruto: 0, acumINSS: 0, acumIR: 0 }
       const r = calcularEmpleadoPlanilla({
+        tasaInssPatronal,
         empleadoId:          f.empleado_id,
         salarioBase:         f.salario_base,
         diasTrabajados:      f.dias_trabajados,
