@@ -26,6 +26,9 @@ export default function RegisterPage() {
   const [loading, setLoading]       = useState(false);
   const [showPass, setShowPass]     = useState(false);
   const [tipoEmpresa, setTipoEmpresa] = useState<TipoEmpresa>("persona_natural");
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
+
+  const TERMINOS_VERSION = "1.0";
 
   // ── Acceso ──────────────────────────────────────────
   const [email,           setEmail]           = useState("");
@@ -73,8 +76,14 @@ export default function RegisterPage() {
       toast.error("El RUC de Persona Jurídica debe tener exactamente 14 caracteres.");
       return;
     }
+    if (!aceptaTerminos) {
+      toast.error("Debes aceptar los Términos y Condiciones y la Política de Privacidad.");
+      return;
+    }
 
     setLoading(true);
+
+    const terminosAceptadosEn = new Date().toISOString();
 
     // 1. Crear usuario Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -111,6 +120,8 @@ export default function RegisterPage() {
         telefono_representante:     repTelefono,
         correo_electronico:         email,
         sitio_web:                  sitioWebJur || null,
+        terminos_aceptados_en:      terminosAceptadosEn,
+        terminos_version:           TERMINOS_VERSION,
       });
       dbError = error;
     } else {
@@ -126,6 +137,8 @@ export default function RegisterPage() {
         correo_electronico: email,
         telefono,
         sitio_web:          sitioWeb || null,
+        terminos_aceptados_en: terminosAceptadosEn,
+        terminos_version:      TERMINOS_VERSION,
       });
       dbError = error;
     }
@@ -379,7 +392,28 @@ export default function RegisterPage() {
             </div>
           </div>
 
-          <button type="submit" disabled={loading}
+          <label className="flex items-start gap-2 text-sm text-slate-600 pt-1">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+              checked={aceptaTerminos}
+              onChange={(e) => setAceptaTerminos(e.target.checked)}
+              required
+            />
+            <span>
+              He leído y acepto los{" "}
+              <Link href="/legal/terminos" target="_blank" className="text-brand-700 font-semibold hover:underline">
+                Términos y Condiciones
+              </Link>{" "}
+              y la{" "}
+              <Link href="/legal/privacidad" target="_blank" className="text-brand-700 font-semibold hover:underline">
+                Política de Privacidad
+              </Link>{" "}
+              de SARA. <span className="text-red-500">*</span>
+            </span>
+          </label>
+
+          <button type="submit" disabled={loading || !aceptaTerminos}
             className="btn-primary w-full flex items-center justify-center gap-2 mt-2">
             {loading ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
