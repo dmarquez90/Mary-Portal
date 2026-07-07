@@ -16,7 +16,7 @@ interface ProductoPOS {
   id: string; nombre: string; codigo: string; codigo_barra: string | null;
   precio_venta: number; stock_actual: number; aplica_iva: boolean;
 }
-interface ClientePOS { id: string; nombre: string; }
+interface ClientePOS { id: string; nombre: string; tipo?: "contado" | "credito"; limite_credito?: number; }
 interface CajaPOS { id: string; nombre: string; tipo: string; ocupada: boolean; }
 interface SesionActiva {
   id: string; cuenta_caja_id: string; monto_apertura: number; fecha_apertura: string;
@@ -193,10 +193,14 @@ export default function PosPage() {
       toast.error("Hay productos con stock insuficiente en el carrito");
       return;
     }
+    const cliente = clientes.find(c => c.id === clienteId);
+    if (tipoPago === "credito" && (!clienteId || cliente?.tipo !== "credito")) {
+      toast.error("Selecciona un cliente con crédito habilitado para vender a crédito");
+      return;
+    }
     setCobrando(true);
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
-    const cliente = clientes.find(c => c.id === clienteId);
     const { data, error } = await supabase.rpc("fn_registrar_venta_pos", {
       p_empresa_id: empresaId,
       p_sesion_caja_id: sesion.id,
@@ -409,15 +413,24 @@ export default function PosPage() {
             </div>
 
             <div className="p-4 border-t border-slate-100 space-y-3">
-              <select className="input text-sm" value={clienteId} onChange={e => setClienteId(e.target.value)}>
+              <select className="input text-sm" value={clienteId} onChange={e => {
+                const nuevoId = e.target.value;
+                setClienteId(nuevoId);
+                if (tipoPago === "credito" && clientes.find(c => c.id === nuevoId)?.tipo !== "credito") {
+                  setTipoPago("contado");
+                }
+              }}>
                 <option value="">Consumidor final</option>
-                {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}{c.tipo === "credito" ? " (Crédito)" : ""}</option>)}
               </select>
 
               <select className="input text-sm" value={tipoPago} onChange={e => setTipoPago(e.target.value)}>
                 <option value="contado">Efectivo</option>
                 <option value="tarjeta">Tarjeta</option>
                 <option value="transferencia">Transferencia</option>
+                <option value="credito" disabled={clientes.find(c => c.id === clienteId)?.tipo !== "credito"}>
+                  Crédito {clientes.find(c => c.id === clienteId)?.tipo !== "credito" ? "(elige un cliente con crédito)" : ""}
+                </option>
               </select>
 
               {tipoPago === "contado" && (

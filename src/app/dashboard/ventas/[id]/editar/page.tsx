@@ -8,6 +8,7 @@ import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { IVA_NICARAGUA } from "@/types";
 import type { Cliente, Producto } from "@/types";
+import AutorizacionAdminModal from "@/components/AutorizacionAdminModal";
 
 interface Linea {
   producto_id: string;
@@ -48,6 +49,12 @@ export default function EditarFacturaPage() {
   const [tasaCambio,    setTasaCambio]    = useState("");
   const [estadoOriginal, setEstadoOriginal] = useState("borrador");
 
+  // ── Autorización de descuento ──────────────────────────
+  const [showAuth,            setShowAuth]            = useState(false);
+  const [descuentoAutorizadoPor, setDescuentoAutorizadoPor] = useState<string | null>(null);
+  const [descuentoAutorizadoEn, setDescuentoAutorizadoEn]   = useState<string | null>(null);
+  const [estadoPendiente,     setEstadoPendiente]     = useState<"borrador" | "emitida" | null>(null);
+
   function lineaVacia(): Linea {
     return { producto_id: "", descripcion: "", cantidad: 1, precio_unitario: 0, descuento_pct: 0, aplica_iva: true };
   }
@@ -78,6 +85,8 @@ export default function EditarFacturaPage() {
         setTipoPago(fac.tipo_pago ?? "contado");
         setNotas(fac.notas ?? "");
         setEstadoOriginal(fac.estado ?? "borrador");
+        setDescuentoAutorizadoPor(fac.descuento_autorizado_por ?? null);
+        setDescuentoAutorizadoEn(fac.descuento_autorizado_en ?? null);
         if (fac.detalle_facturas?.length) {
           setLineas(fac.detalle_facturas.map((d: any) => ({
             producto_id: d.producto_id ?? "",
@@ -148,6 +157,9 @@ export default function EditarFacturaPage() {
 
   function updateLinea(idx: number, key: keyof Linea, val: string | number | boolean) {
     setLineas(prev => prev.map((l, i) => i === idx ? { ...l, [key]: val } : l));
+    // Si cambia el descuento después de haber sido autorizado, se pide
+    // autorización de nuevo — evita que se infle el % ya aprobado.
+    if (key === "descuento_pct") setDescuentoAutorizadoPor(null);
   }
 
   const calcLinea = (l: Linea) => {
@@ -161,8 +173,18 @@ export default function EditarFacturaPage() {
   const descuentoTotal = lineas.reduce((s, l) => s + l.cantidad * l.precio_unitario * (l.descuento_pct / 100), 0);
   const total         = subtotal + ivaTotal;
 
-  async function handleSave(estado: "borrador" | "emitida") {
+  async function handleSave(estado: "borrador" | "emitida", autorizadoPorOverride?: string) {
     if (!empresaId) { toast.error("Primero configura los datos de tu empresa."); return; }
+
+    // ── Descuento manual requiere autorización de un admin ──
+    // (se pasa autorizadoPorOverride cuando se acaba de autorizar en el
+    // modal, porque el estado de React todavía no se actualizó)
+    const autorizadoPor = autorizadoPorOverride ?? descuentoAutorizadoPor;
+    if (descuentoTotal > 0 && !autorizadoPor) {
+      setEstadoPendiente(estado);
+      setShowAuth(true);
+      return;
+    }
 
     // ── Validar que hay al menos una línea con descripción ──
     const lineasValidas = lineas.filter(l => l.descripcion.trim() !== "");
@@ -224,6 +246,8 @@ export default function EditarFacturaPage() {
       cuenta_banco_id:   cuentaBancoFinal,
       cuenta_caja_id:    cuentaCajaFinal,
       ...(bloqueadoPago ? {} : { tasa_cambio: cuentaCobroEsUSD ? Number(tasaCambio) : null }),
+      descuento_autorizado_por: descuentoTotal > 0 ? autorizadoPor : null,
+      descuento_autorizado_en:  descuentoTotal > 0 ? (descuentoAutorizadoEn ?? new Date().toISOString()) : null,
     }).eq("id", facturaId).select().single();
 
     if (error || !factura) {
@@ -507,6 +531,18 @@ export default function EditarFacturaPage() {
           </div>
         </div>
       </div>
+
+      <AutorizacionAdminModal
+        open={showAuth}
+        onClose={() => { setShowAuth(false); setEstadoPendiente(null); }}
+        mensaje="Esta factura tiene un descuento manual. Ingresa la contraseña de un administrador para autorizarlo."
+        onAuthorized={(adminId) => {
+          setDescuentoAutorizadoPor(adminId);
+          setDescuentoAutorizadoEn(new Date().toISOString());
+          setShowAuth(false);
+          if (estadoPendiente) { handleSave(estadoPendiente, adminId); setEstadoPendiente(null); }
+        }}
+      />
     </div>
   );
 }

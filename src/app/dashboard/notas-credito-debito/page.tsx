@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { FileX, Plus, ChevronDown, Check, Package } from 'lucide-react'
+import AutorizacionAdminModal from '@/components/AutorizacionAdminModal'
 
 interface Nota {
   id: string
@@ -79,6 +80,11 @@ export default function NotasCreditoDebitoPage() {
   const [modoManual,    setModoManual]    = useState(false)  // fallback si no hay detalle
   const [subtotalManual, setSubtotalManual] = useState('')
   const [ivaManual,     setIvaManual]     = useState('')
+
+  // ── Autorización de nota de crédito manual ────────────
+  const [showAuth,               setShowAuth]               = useState(false)
+  const [autorizadoPor,          setAutorizadoPor]          = useState<string | null>(null)
+  const [autorizadoEn,           setAutorizadoEn]           = useState<string | null>(null)
 
   // ── cargar empresa y datos al montar ────────────────────────
   useEffect(() => {
@@ -207,12 +213,23 @@ export default function NotasCreditoDebitoPage() {
     setMotivo(''); setRefFacturaId(''); setRefCompraId('')
     setItems([]); setModoManual(false)
     setSubtotalManual(''); setIvaManual('')
+    setAutorizadoPor(null); setAutorizadoEn(null)
     setError('')
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(e?: React.FormEvent, autorizadoPorOverride?: string) {
+    e?.preventDefault()
     if (totFinal <= 0) { setError('El total de la nota debe ser mayor a cero.'); return }
+
+    // ── Nota de crédito con monto manual requiere autorización ──
+    // (una nota de crédito con monto libre es el mismo riesgo que un
+    // descuento manual en Ventas)
+    const autorizado = autorizadoPorOverride ?? autorizadoPor
+    if (tipo === 'credito' && modoManual && !autorizado) {
+      setShowAuth(true)
+      return
+    }
+
     setSaving(true); setError('')
 
     // Construir descripción de ítems para el motivo
@@ -256,6 +273,8 @@ export default function NotasCreditoDebitoPage() {
         total: totFinal,
         estado: 'emitida', // se marca 'aplicada' abajo, tras reflejar su efecto en el documento origen
         detalles: detallesPayload,
+        descuento_autorizado_por: modoManual ? autorizado : null,
+        descuento_autorizado_en:  modoManual ? (autorizadoEn ?? new Date().toISOString()) : null,
       })
     })
     const d = await r.json()
@@ -562,6 +581,7 @@ export default function NotasCreditoDebitoPage() {
                             const sub = parseFloat(e.target.value) || 0
                             setSubtotalManual(e.target.value)
                             setIvaManual((sub * IVA).toFixed(2))
+                            setAutorizadoPor(null)
                           }} />
                       </div>
                       <div>
@@ -584,6 +604,7 @@ export default function NotasCreditoDebitoPage() {
                           const sub = parseFloat(e.target.value) || 0
                           setSubtotalManual(e.target.value)
                           setIvaManual((sub * IVA).toFixed(2))
+                          setAutorizadoPor(null)
                         }} />
                     </div>
                     <div>
@@ -682,6 +703,18 @@ export default function NotasCreditoDebitoPage() {
           </table>
         </div>
       )}
+
+      <AutorizacionAdminModal
+        open={showAuth}
+        onClose={() => setShowAuth(false)}
+        mensaje="Esta nota de crédito usa un monto manual. Ingresa la contraseña de un administrador para autorizarlo."
+        onAuthorized={(adminId) => {
+          setAutorizadoPor(adminId)
+          setAutorizadoEn(new Date().toISOString())
+          setShowAuth(false)
+          handleSubmit(undefined, adminId)
+        }}
+      />
     </div>
   )
 }
