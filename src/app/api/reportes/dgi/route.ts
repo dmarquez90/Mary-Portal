@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ventas, empresa, mes, anio });
   }
 
-  if (tipo === "compras" || tipo === "credito" || tipo === "retenciones" || tipo === "libro_compras") {
+  if (tipo === "compras" || tipo === "credito" || tipo === "retenciones" || tipo === "libro_compras" || tipo === "credito_isc") {
     const { data: comprasData } = await supabase
       .from("compras")
       .select("*, proveedor:proveedores(nombre, ruc, tipo_persona)")
@@ -85,6 +85,11 @@ export async function GET(request: NextRequest) {
       iva_total:                Number(c.iva_total),
       total:                    Number(c.total),
       tipo_proveedor:           (c.proveedor as { tipo_persona?: string } | null)?.tipo_persona ?? "juridica",
+      // Retención IR registrada en la compra (código del catálogo DGI);
+      // las compras legadas con retención pero sin código son 22 (2% general)
+      retencion_ir:             Number(c.retencion_ir ?? 0),
+      retencion_codigo:         c.retencion_codigo ?? (Number(c.retencion_ir ?? 0) > 0 ? "22" : null),
+      isc_total:                Number(c.isc_total ?? 0),
     }));
 
     return NextResponse.json({ compras, empresa, mes, anio });

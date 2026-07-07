@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { formatCurrency, nombreMes } from "@/lib/utils";
 import { BarChart3, Download, Eye, FileSpreadsheet, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
+import { alicuotaLabel } from "@/lib/tributacion/retenciones-catalogo";
 
 /* ─── tipos ──────────────────────────────────────────────── */
 interface MesData {
@@ -15,7 +16,7 @@ interface MesData {
 }
 
 interface VentaRow { numero_factura: string; fecha_emision: string; cliente_nombre: string; cliente_ruc: string; subtotal: number; iva_total: number; total: number; }
-interface CompraRow { numero_compra: string; numero_factura_proveedor?: string | null; fecha_compra: string; proveedor_nombre: string; proveedor_ruc: string; subtotal: number; iva_total: number; total: number; tipo_proveedor: string; }
+interface CompraRow { numero_compra: string; numero_factura_proveedor?: string | null; fecha_compra: string; proveedor_nombre: string; proveedor_ruc: string; subtotal: number; iva_total: number; total: number; tipo_proveedor: string; retencion_ir: number; retencion_codigo: string | null; isc_total: number; }
 interface DatosReporte { ventas?: VentaRow[]; compras?: CompraRow[]; empresa: { nombre: string; ruc: string }; mes: number; anio: number; }
 
 /* ─── estilos xlsx-js-style ──────────────────────────────── */
@@ -147,22 +148,22 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
   }
 
   if (tipo === "retenciones") {
-    const naturales = compras.filter(c => c.tipo_proveedor === "natural");
+    const conRetencion = compras.filter(c => c.retencion_ir > 0);
     return (
       <div>
-        <p className="text-xs text-slate-500 mb-3">Retenciones en la Fuente IR 2% — Código 22 · Personas naturales</p>
+        <p className="text-xs text-slate-500 mb-3">Retenciones en la Fuente IR — según código de retención de cada compra</p>
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-xs">
             <thead><tr className="bg-amber-700 text-white">
-              {["RUC","Nombre","N° Documento","Fecha","Base Imponible","IR 2%","Cód"].map(h => <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}
+              {["RUC","Nombre","N° Documento","Fecha","Base Imponible","IR Retenido","Alícuota","Cód"].map(h => <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}
             </tr></thead>
             <tbody>
-              {naturales.length === 0
-                ? <tr><td colSpan={7} className="text-center py-6 text-slate-400">Sin compras a personas naturales en este período</td></tr>
-                : naturales.map((c, i) => {
+              {conRetencion.length === 0
+                ? <tr><td colSpan={8} className="text-center py-6 text-slate-400">Sin compras con retención en este período</td></tr>
+                : conRetencion.map((c, i) => {
                     const fp = c.fecha_compra?.split("-") ?? [];
                     const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
-                    const ir = +(c.subtotal * 0.02).toFixed(2);
+                    const codigo = c.retencion_codigo ?? "22";
                     return (
                       <tr key={i} className={i % 2 === 0 ? "bg-amber-50" : "bg-white"}>
                         <td className="px-3 py-1.5 font-mono">{c.proveedor_ruc}</td>
@@ -170,19 +171,55 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
                         <td className="px-3 py-1.5 font-mono">{c.numero_factura_proveedor ?? c.numero_compra}</td>
                         <td className="px-3 py-1.5">{fecha}</td>
                         <td className="px-3 py-1.5 text-right">{formatCurrency(c.subtotal)}</td>
-                        <td className="px-3 py-1.5 text-right text-amber-700 font-medium">{formatCurrency(ir)}</td>
-                        <td className="px-3 py-1.5 text-center">22</td>
+                        <td className="px-3 py-1.5 text-right text-amber-700 font-medium">{formatCurrency(c.retencion_ir)}</td>
+                        <td className="px-3 py-1.5 text-center">{alicuotaLabel(codigo)}</td>
+                        <td className="px-3 py-1.5 text-center">{codigo}</td>
                       </tr>
                     );
                   })}
-              {naturales.length > 0 && (
+              {conRetencion.length > 0 && (
                 <tr className="bg-amber-100 font-semibold">
                   <td colSpan={4} className="px-3 py-2 text-right text-xs text-slate-600">TOTALES</td>
-                  <td className="px-3 py-2 text-right">{formatCurrency(naturales.reduce((s,c)=>s+c.subtotal,0))}</td>
-                  <td className="px-3 py-2 text-right text-amber-700">{formatCurrency(naturales.reduce((s,c)=>s+(c.subtotal*0.02),0))}</td>
-                  <td />
+                  <td className="px-3 py-2 text-right">{formatCurrency(conRetencion.reduce((s,c)=>s+c.subtotal,0))}</td>
+                  <td className="px-3 py-2 text-right text-amber-700">{formatCurrency(conRetencion.reduce((s,c)=>s+c.retencion_ir,0))}</td>
+                  <td colSpan={2} />
                 </tr>
               )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  if (tipo === "credito_isc") {
+    const conIsc = compras.filter(c => c.isc_total > 0);
+    return (
+      <div>
+        <p className="text-xs text-slate-500 mb-3">Crédito Fiscal ISC — compras con ISC desglosado en la factura</p>
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full text-xs">
+            <thead><tr className="bg-rose-800 text-white">
+              {["RUC","Nombre","N° Documento","Fecha","Sin Impuesto","ISC","Renglón"].map(h => <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {conIsc.length === 0
+                ? <tr><td colSpan={7} className="text-center py-6 text-slate-400">Sin compras con ISC registrado en este período. Ingresa el ISC desglosado al registrar la compra.</td></tr>
+                : conIsc.map((c, i) => {
+                    const fp = c.fecha_compra?.split("-") ?? [];
+                    const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
+                    return (
+                      <tr key={i} className={i % 2 === 0 ? "bg-rose-50" : "bg-white"}>
+                        <td className="px-3 py-1.5 font-mono">{c.proveedor_ruc}</td>
+                        <td className="px-3 py-1.5 max-w-[160px] truncate">{c.proveedor_nombre}</td>
+                        <td className="px-3 py-1.5 font-mono">{c.numero_factura_proveedor ?? c.numero_compra}</td>
+                        <td className="px-3 py-1.5">{fecha}</td>
+                        <td className="px-3 py-1.5 text-right">{formatCurrency(c.subtotal)}</td>
+                        <td className="px-3 py-1.5 text-right text-rose-700 font-medium">{formatCurrency(c.isc_total)}</td>
+                        <td className="px-3 py-1.5 text-center">124</td>
+                      </tr>
+                    );
+                  })}
             </tbody>
           </table>
         </div>
@@ -239,7 +276,7 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-xs">
             <thead><tr className="bg-teal-800 text-white">
-              {["Fecha","N° Comprobante","Proveedor","RUC","Sin IVA","IVA","Total","IR 2%","Tipo"].map(h => <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}
+              {["Fecha","N° Comprobante","Proveedor","RUC","Sin IVA","IVA","Total","IR Ret.","Tipo"].map(h => <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}
             </tr></thead>
             <tbody>
               {compras.length === 0
@@ -247,7 +284,7 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
                 : compras.map((c, i) => {
                     const fp = c.fecha_compra?.split("-") ?? [];
                     const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
-                    const ir = c.tipo_proveedor === "natural" ? +(c.subtotal * 0.02).toFixed(2) : 0;
+                    const ir = c.retencion_ir;
                     return (
                       <tr key={i} className={i % 2 === 0 ? "bg-teal-50" : "bg-white"}>
                         <td className="px-3 py-1.5">{fecha}</td>
@@ -268,7 +305,7 @@ function PreviewContent({ tipo, datos }: { tipo: string; datos: DatosReporte }) 
                   <td className="px-3 py-2 text-right">{formatCurrency(compras.reduce((s,c)=>s+c.subtotal,0))}</td>
                   <td className="px-3 py-2 text-right text-teal-700">{formatCurrency(compras.reduce((s,c)=>s+c.iva_total,0))}</td>
                   <td className="px-3 py-2 text-right">{formatCurrency(compras.reduce((s,c)=>s+c.total,0))}</td>
-                  <td className="px-3 py-2 text-right text-amber-700">{formatCurrency(compras.filter(c=>c.tipo_proveedor==="natural").reduce((s,c)=>s+(c.subtotal*0.02),0))}</td>
+                  <td className="px-3 py-2 text-right text-amber-700">{formatCurrency(compras.reduce((s,c)=>s+c.retencion_ir,0))}</td>
                   <td />
                 </tr>
               )}
@@ -463,15 +500,46 @@ export default function ReportesPage() {
       } else if (tipo === "retenciones") {
         const compras = datos.compras ?? [];
         const headers = ["No. RUC","NOMBRE Y APELLIDOS Ó RAZÓN SOCIAL","INGRESOS BRUTOS MENSUALES","VALOR COTIZACIÓN INSS","VALOR FONDO PENSIONES AHORRO","NÚMERO DE DOCUMENTO","FECHA DE DOCUMENTO","BASE IMPONIBLE","VALOR RETENIDO","ALÍCUOTA DE RETENCIÓN","CÓDIGO DE RETENCIÓN"];
-        const rows = compras.filter(c => c.tipo_proveedor === "natural").map(c => {
+        // Toda compra con retención registrada, con su código real del
+        // catálogo (22 general 2%, 27 servicios profesionales 10%, etc.)
+        const rows = compras.filter(c => c.retencion_ir > 0).map(c => {
           const fp = c.fecha_compra?.split("-") ?? [];
           const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
-          return [c.proveedor_ruc, c.proveedor_nombre, c.subtotal, 0, 0, c.numero_factura_proveedor ?? c.numero_compra, fecha, c.subtotal, +(c.subtotal * 0.02).toFixed(2), "2%", "22"];
+          const codigo = c.retencion_codigo ?? "22";
+          return [c.proveedor_ruc, c.proveedor_nombre, c.subtotal, 0, 0, c.numero_factura_proveedor ?? c.numero_compra, fecha, c.subtotal, c.retencion_ir, alicuotaLabel(codigo), codigo];
         });
         const ws3 = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         ws3["!cols"] = [{ wch: 18 },{ wch: 35 },{ wch: 18 },{ wch: 18 },{ wch: 18 },{ wch: 20 },{ wch: 15 },{ wch: 15 },{ wch: 15 },{ wch: 12 },{ wch: 12 }];
         applyStyles(ws3 as Record<string, unknown>, 0, 11);
         XLSX.utils.book_append_sheet(wb, ws3, "Hoja1");
+
+      } else if (tipo === "credito_isc") {
+        // Planilla oficial de Crédito Fiscal ISC: se llena la plantilla de la
+        // DGI con las compras que registraron ISC desglosado en la factura.
+        const compras = (datos.compras ?? []).filter(c => c.isc_total > 0);
+        const respIsc = await fetch("/plantillas-vet/dgi-credito-fiscal-isc.xlsx");
+        if (!respIsc.ok) throw new Error("No se encontró la plantilla oficial en /plantillas-vet");
+        wb = XLSX.read(await respIsc.arrayBuffer(), { type: "array", cellStyles: true });
+        const wsIsc = wb.Sheets["CREDITO FISCAL ISC"];
+        if (!wsIsc) throw new Error("La plantilla oficial no tiene la hoja esperada");
+
+        let filaIsc = 2; // los datos inician bajo el encabezado de la fila 1
+        for (const c of compras) {
+          const fp = c.fecha_compra?.split("-") ?? [];
+          const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
+          XLSX.utils.sheet_add_aoa(wsIsc, [[
+            c.proveedor_ruc,
+            c.proveedor_nombre,
+            c.numero_factura_proveedor ?? c.numero_compra,
+            "Compra con ISC",
+            fecha,
+            c.subtotal,
+            c.isc_total,
+            "", // Código Impuesto: según catálogo del producto fiscal (completar si aplica)
+            "124",
+          ]], { origin: `A${filaIsc}` });
+          filaIsc++;
+        }
 
       } else if (tipo === "libro_ventas") {
         const ventas = datos.ventas ?? [];
@@ -499,16 +567,16 @@ export default function ReportesPage() {
 
       } else if (tipo === "libro_compras") {
         const compras = datos.compras ?? [];
-        const headers = ["Fecha","N° Comprobante","Proveedor","RUC Proveedor","Valor sin IVA","IVA Acreditable","Total Compra","IR Retenido 2%","Tipo Proveedor"];
+        const headers = ["Fecha","N° Comprobante","Proveedor","RUC Proveedor","Valor sin IVA","IVA Acreditable","Total Compra","IR Retenido","Tipo Proveedor"];
         const titleRow = [`Libro de Compras — ${empresa}`, "", "", "", "", "", "", "", ""];
         const subtitleRow = [`Período: ${mesNombre} ${datos.anio ?? anioSeleccionado}`, "", "", "", "", "", "", "", ""];
+        // IR retenido real de cada compra (según su código de retención)
         const rows = compras.map(c => {
           const fp = c.fecha_compra?.split("-") ?? [];
           const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
-          const ir = c.tipo_proveedor === "natural" ? +(c.subtotal * 0.02).toFixed(2) : 0;
-          return [fecha, c.numero_factura_proveedor ?? c.numero_compra, c.proveedor_nombre, c.proveedor_ruc, c.subtotal, c.iva_total, c.total, ir, c.tipo_proveedor === "natural" ? "Natural" : "Jurídica"];
+          return [fecha, c.numero_factura_proveedor ?? c.numero_compra, c.proveedor_nombre, c.proveedor_ruc, c.subtotal, c.iva_total, c.total, c.retencion_ir, c.tipo_proveedor === "natural" ? "Natural" : "Jurídica"];
         });
-        const totalRow = ["", "", "", "TOTAL", compras.reduce((s,c)=>s+c.subtotal,0), compras.reduce((s,c)=>s+c.iva_total,0), compras.reduce((s,c)=>s+c.total,0), compras.filter(c=>c.tipo_proveedor==="natural").reduce((s,c)=>s+(c.subtotal*0.02),0), ""];
+        const totalRow = ["", "", "", "TOTAL", compras.reduce((s,c)=>s+c.subtotal,0), compras.reduce((s,c)=>s+c.iva_total,0), compras.reduce((s,c)=>s+c.total,0), compras.reduce((s,c)=>s+c.retencion_ir,0), ""];
         const ws5 = XLSX.utils.aoa_to_sheet([titleRow, subtitleRow, headers, ...rows, totalRow]);
         ws5["!cols"] = [{ wch: 12 },{ wch: 16 },{ wch: 32 },{ wch: 18 },{ wch: 16 },{ wch: 16 },{ wch: 14 },{ wch: 14 },{ wch: 14 }];
         ws5["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } }];
@@ -535,7 +603,8 @@ export default function ReportesPage() {
   const VET_REPORTES = [
     { tipo: "ingresos",    label: "Planilla de Ingresos",     desc: "DMI v2.1 · Gravadas 15%, exentas y rangos de factura por serie",  hdr: "bg-blue-700",   icon: "📊" },
     { tipo: "credito",     label: "Crédito Fiscal IVA",       desc: "Compras con IVA acreditable · Renglón 105",          hdr: "bg-purple-700", icon: "🧾" },
-    { tipo: "retenciones", label: "Retenciones en la Fuente", desc: "IR 2% sobre compras a personas naturales · Cód. 22", hdr: "bg-amber-700",  icon: "📋" },
+    { tipo: "retenciones", label: "Retenciones en la Fuente", desc: "IR según código de cada compra (22 general 2%, 27 profesionales 10%...)", hdr: "bg-amber-700",  icon: "📋" },
+    { tipo: "credito_isc", label: "Crédito Fiscal ISC",       desc: "Compras con ISC desglosado · Plantilla oficial DGI",  hdr: "bg-rose-800",   icon: "⛽" },
   ];
 
   const LIBROS = [

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { IVA_NICARAGUA } from "@/types";
 import type { Proveedor, Producto } from "@/types";
+import { CODIGOS_RETENCION, getCodigoRetencion } from "@/lib/tributacion/retenciones-catalogo";
 
 interface Linea {
   producto_id: string;
@@ -35,6 +36,10 @@ export default function NuevaCompraPage() {
 
   const [proveedorId,          setProveedorId]          = useState("");
   const [proveedorTipo,        setProveedorTipo]         = useState<string>("juridica");
+  // Código de retención IR ("" = sin retención). Al cambiar el proveedor se
+  // preselecciona 22 (2% general) para personas naturales.
+  const [retencionCodigo,      setRetencionCodigo]      = useState("");
+  const [iscCompra,            setIscCompra]            = useState("");
   const [fechaCompra,          setFechaCompra]          = useState(new Date().toISOString().split("T")[0]);
   const [tipoPago,             setTipoPago]             = useState("contado");
   const [notas,                setNotas]                = useState("");
@@ -98,9 +103,11 @@ export default function NuevaCompraPage() {
 
   // Actualizar tipo_persona cuando cambia el proveedor
   useEffect(() => {
-    if (!proveedorId) { setProveedorTipo("juridica"); return; }
+    if (!proveedorId) { setProveedorTipo("juridica"); setRetencionCodigo(""); return; }
     const prov = proveedores.find(p => p.id === proveedorId);
-    setProveedorTipo(prov?.tipo_persona ?? "juridica");
+    const tipo = prov?.tipo_persona ?? "juridica";
+    setProveedorTipo(tipo);
+    setRetencionCodigo(tipo === "natural" ? "22" : "");
   }, [proveedorId, proveedores]);
 
   // ── Moneda de la cuenta de pago elegida ──────────────────────
@@ -232,9 +239,10 @@ export default function NuevaCompraPage() {
   const subtotal    = lineas.reduce((s, l) => s + calcLinea(l).sub, 0);
   const ivaTotal    = lineas.reduce((s, l) => s + calcLinea(l).iva, 0);
   const total       = subtotal + ivaTotal;
-  // ── Retención IR 2% solo para proveedor natural ────────────
-  const retencionIR = proveedorTipo === "natural" ? Math.round(subtotal * 0.02 * 100) / 100 : 0;
-  const totalPagar  = total - retencionIR;
+  // ── Retención IR según el código del catálogo DGI seleccionado ──
+  const retencionSel = getCodigoRetencion(retencionCodigo);
+  const retencionIR  = retencionSel ? Math.round(subtotal * retencionSel.alicuota * 100) / 100 : 0;
+  const totalPagar   = total - retencionIR;
 
   async function handleSave(estado: "borrador" | "recibida") {
     if (!empresaId) { toast.error("Configura tu empresa primero."); return; }
@@ -277,6 +285,8 @@ export default function NuevaCompraPage() {
       iva_total:      ivaTotal,
       total,
       retencion_ir:   retencionIR,
+      retencion_codigo: retencionIR > 0 ? retencionCodigo : null,
+      isc_total:      Number(iscCompra) > 0 ? Number(iscCompra) : 0,
       total_a_pagar:  totalPagar,
       cuenta_banco_id: cuentaBancoFinal,
       cuenta_caja_id:  cuentaCajaFinal,
@@ -352,9 +362,21 @@ export default function NuevaCompraPage() {
                     </option>
                   ))}
                 </select>
-                {proveedorTipo === "natural" && (
+              </div>
+
+              <div>
+                <label className="label">Retención IR en la fuente</label>
+                <select className="input" value={retencionCodigo} onChange={e => setRetencionCodigo(e.target.value)}>
+                  <option value="">Sin retención</option>
+                  {CODIGOS_RETENCION.map(c => (
+                    <option key={c.codigo} value={c.codigo}>
+                      Cód. {c.codigo} — {c.descripcion}
+                    </option>
+                  ))}
+                </select>
+                {proveedorTipo === "natural" && !retencionCodigo && (
                   <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" /> Persona natural — se aplicará retención IR 2%
+                    <AlertCircle className="w-3 h-3" /> Proveedor persona natural: normalmente aplica retención (cód. 22 general o 27 servicios profesionales)
                   </p>
                 )}
               </div>
@@ -576,13 +598,13 @@ export default function NuevaCompraPage() {
                 <span>Total factura</span><span>{formatCurrency(total)}</span>
               </div>
 
-              {/* ── Retención IR 2% para proveedor natural ── */}
-              {retencionIR > 0 && (
+              {/* ── Retención IR según código del catálogo DGI ── */}
+              {retencionIR > 0 && retencionSel && (
                 <>
                   <div className="flex justify-between text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5 mt-2">
                     <span className="flex items-center gap-1">
                       <AlertCircle className="w-3.5 h-3.5" />
-                      Retención IR 2% (Art. 44 LCT)
+                      Retención IR {Math.round(retencionSel.alicuota * 1000) / 10}% — Cód. {retencionSel.codigo} (Art. 44 LCT)
                     </span>
                     <span>- {formatCurrency(retencionIR)}</span>
                   </div>
@@ -594,6 +616,17 @@ export default function NuevaCompraPage() {
                   </p>
                 </>
               )}
+
+              {/* ── ISC pagado (informativo, planilla Crédito Fiscal ISC) ── */}
+              <div className="pt-2">
+                <label className="label text-xs">ISC pagado en la factura <span className="text-slate-400 font-normal">(opcional)</span></label>
+                <input type="number" min="0" step="0.01" className="input text-sm font-mono" placeholder="0.00"
+                  value={iscCompra} onChange={e => setIscCompra(e.target.value)} />
+                <p className="text-xs text-slate-400 mt-1">
+                  Solo si la factura del proveedor desglosa ISC (combustibles, industria fiscal).
+                  Alimenta la planilla de Crédito Fiscal ISC de la DMI; no altera el total.
+                </p>
+              </div>
             </div>
 
             {numFacturaProveedor && (
