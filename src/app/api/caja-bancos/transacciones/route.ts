@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   if (!empresaId) return NextResponse.json({ error: 'Empresa no encontrada' }, { status: 404 })
 
   const body = await req.json()
-  const { cuenta_banco_id, tipo, direccion, monto, descripcion, fecha, referencia, monto_usd, tipo_cambio, notas } = body
+  const { cuenta_banco_id, tipo, direccion, monto, descripcion, fecha, referencia, monto_usd, tipo_cambio, notas, cuenta_contrapartida_id } = body
 
   if (!cuenta_banco_id || !tipo || !monto || !descripcion || !fecha)
     return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
@@ -68,6 +68,8 @@ export async function POST(req: Request) {
       fecha,
       referencia: referencia || null,
       notas: notas || null,
+      direccion: direccion || null,
+      cuenta_contrapartida_id: cuenta_contrapartida_id || null,
       created_by: user.id,
     })
     .select()

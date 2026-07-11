@@ -32,6 +32,7 @@ interface Cheque {
   fecha_vencimiento: string | null; estado: string; notas: string | null
   cuentas_banco?: { nombre: string; banco: string | null; moneda: string }
 }
+interface CuentaContable { id: string; codigo: string; nombre: string; tipo: string }
 interface ResumenParcial { totalNIO: number; totalUSD: number; ingresosMes: number; egresosMes: number }
 interface Resumen {
   banco: ResumenParcial; caja: ResumenParcial
@@ -135,6 +136,61 @@ function Campo({ label, children }: { label: string; children: React.ReactNode }
 
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300'
 
+// ── Selector de cuenta contable (clasificación del movimiento) ─
+// Determina a qué cuenta del plan se asienta la contrapartida del
+// movimiento (la cuenta de caja/banco la resuelve el trigger en la BD).
+function SelectorCuenta({ cuentas, value, onChange, preferTipo }: {
+  cuentas: CuentaContable[]
+  value: string
+  onChange: (id: string) => void
+  preferTipo?: string
+}) {
+  const [texto, setTexto] = useState('')
+  const [abierto, setAbierto] = useState(false)
+
+  const seleccionada = cuentas.find(c => c.id === value)
+  const filtro = texto.toLowerCase()
+  const filtradas = cuentas
+    .filter(c => !filtro || c.codigo.toLowerCase().includes(filtro) || c.nombre.toLowerCase().includes(filtro))
+    .sort((a, b) => {
+      if (preferTipo && a.tipo !== b.tipo) {
+        if (a.tipo === preferTipo) return -1
+        if (b.tipo === preferTipo) return 1
+      }
+      return a.codigo.localeCompare(b.codigo)
+    })
+    .slice(0, 8)
+
+  return (
+    <div className="relative">
+      <input
+        className={inputCls}
+        value={abierto ? texto : (seleccionada ? `${seleccionada.codigo} — ${seleccionada.nombre}` : '')}
+        onChange={e => { setTexto(e.target.value); if (value) onChange('') }}
+        onFocus={() => { setAbierto(true); setTexto('') }}
+        onBlur={() => setTimeout(() => setAbierto(false), 150)}
+        placeholder="Buscar cuenta (ej: publicidad, energía, multas)..."
+      />
+      {abierto && filtradas.length > 0 && (
+        <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+          {filtradas.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onChange(c.id); setAbierto(false) }}
+              className="w-full text-left px-3 py-1.5 hover:bg-blue-50 text-xs border-b border-gray-50"
+            >
+              <span className="font-mono text-gray-500 mr-2">{c.codigo}</span>
+              <span>{c.nombre}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Tabs ─────────────────────────────────────────────────────
 const TABS = [
   { id: 'resumen', label: 'Resumen' },
@@ -153,6 +209,7 @@ export default function CajaBancosPage() {
   const [transacciones, setTransacciones] = useState<TransaccionBanco[]>([])
   const [movimientosCaja, setMovimientosCaja] = useState<MovimientoCaja[]>([])
   const [cheques, setCheques] = useState<Cheque[]>([])
+  const [cuentasContables, setCuentasContables] = useState<CuentaContable[]>([])
   const [loading, setLoading] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
@@ -167,8 +224,8 @@ export default function CajaBancosPage() {
   // Forms
   const [formBanco, setFormBanco] = useState({ nombre: '', banco: '', numero_cuenta: '', tipo: 'corriente', moneda: 'NIO', saldo_inicial: '', notas: '' })
   const [formCaja, setFormCaja] = useState({ nombre: '', tipo: 'caja_general', moneda: 'NIO', saldo_inicial: '', limite_caja_chica: '', notas: '' })
-  const [formTx, setFormTx] = useState({ cuenta_banco_id: '', direccion: 'entrada', tipo: 'deposito', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '' })
-  const [formMovCaja, setFormMovCaja] = useState({ cuenta_caja_id: '', tipo: 'ingreso', monto: '', descripcion: '', fecha: hoy(), notas: '' })
+  const [formTx, setFormTx] = useState({ cuenta_banco_id: '', direccion: 'entrada', tipo: 'deposito', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '', cuenta_contrapartida_id: '' })
+  const [formMovCaja, setFormMovCaja] = useState({ cuenta_caja_id: '', tipo: 'ingreso', monto: '', descripcion: '', fecha: hoy(), notas: '', cuenta_contrapartida_id: '' })
   const [formCheque, setFormCheque] = useState({ cuenta_banco_id: '', numero_cheque: '', tipo: 'cobro', monto: '', beneficiario: '', fecha_emision: hoy(), fecha_vencimiento: '', notas: '' })
 
   // Cargar datos según tab activa
@@ -208,6 +265,13 @@ export default function CajaBancosPage() {
     const r = await fetch('/api/caja-bancos/cheques')
     if (r.ok) { const d = await r.json(); setCheques(d.cheques || []) }
     setLoading(false)
+  }, [])
+
+  // Plan de cuentas para clasificar movimientos manuales (una sola vez)
+  useEffect(() => {
+    fetch('/api/plan-cuentas?permite_movimiento=true')
+      .then(r => r.ok ? r.json() : { cuentas: [] })
+      .then(d => setCuentasContables(d.cuentas || []))
   }, [])
 
   // Carga inicial: resumen + bancos + cajas en paralelo (sin esperar cambio de tab)
@@ -256,6 +320,8 @@ export default function CajaBancosPage() {
   async function guardarTx() {
     if (!formTx.cuenta_banco_id || !formTx.monto || !formTx.descripcion)
       { setError('Cuenta, monto y descripción son requeridos'); return }
+    if (!formTx.cuenta_contrapartida_id)
+      { setError('Selecciona la clasificación contable (¿qué es este movimiento?)'); return }
     setGuardando(true); setError('')
     const r = await fetch('/api/caja-bancos/transacciones', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -264,7 +330,7 @@ export default function CajaBancosPage() {
     const d = await r.json()
     if (!r.ok) { setError(d.error || 'Error al guardar'); setGuardando(false); return }
     setModalTx(false)
-    setFormTx({ cuenta_banco_id: '', direccion: 'entrada', tipo: 'deposito', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '' })
+    setFormTx({ cuenta_banco_id: '', direccion: 'entrada', tipo: 'deposito', monto: '', descripcion: '', fecha: hoy(), referencia: '', monto_usd: '', tipo_cambio: '', notas: '', cuenta_contrapartida_id: '' })
     cargarTx(); cargarResumen(); cargarBancos()
     setGuardando(false)
   }
@@ -273,6 +339,8 @@ export default function CajaBancosPage() {
   async function guardarMovCaja() {
     if (!formMovCaja.cuenta_caja_id || !formMovCaja.monto || !formMovCaja.descripcion)
       { setError('Caja, monto y descripción son requeridos'); return }
+    if (!formMovCaja.cuenta_contrapartida_id)
+      { setError('Selecciona la clasificación contable (¿qué es este movimiento?)'); return }
     setGuardando(true); setError('')
     const r = await fetch('/api/caja-bancos/movimientos-caja', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -281,7 +349,7 @@ export default function CajaBancosPage() {
     const d = await r.json()
     if (!r.ok) { setError(d.error || 'Error al guardar'); setGuardando(false); return }
     setModalMovCaja(false)
-    setFormMovCaja({ cuenta_caja_id: '', tipo: 'ingreso', monto: '', descripcion: '', fecha: hoy(), notas: '' })
+    setFormMovCaja({ cuenta_caja_id: '', tipo: 'ingreso', monto: '', descripcion: '', fecha: hoy(), notas: '', cuenta_contrapartida_id: '' })
     cargarCajas(); cargarMovCaja(); cargarResumen()
     setGuardando(false)
   }
@@ -819,6 +887,15 @@ export default function CajaBancosPage() {
               <input className={inputCls} value={formTx.referencia} onChange={e => setFormTx({...formTx, referencia: e.target.value})} placeholder="Ej: TRF-0001" />
             </Campo>
           </div>
+          <Campo label={formTx.direccion === 'salida' ? 'Clasificación contable (¿qué se pagó?) *' : 'Clasificación contable (¿de dónde viene?) *'}>
+            <SelectorCuenta
+              cuentas={cuentasContables}
+              value={formTx.cuenta_contrapartida_id}
+              onChange={id => setFormTx({...formTx, cuenta_contrapartida_id: id})}
+              preferTipo={formTx.direccion === 'salida' ? 'gasto' : 'ingreso'}
+            />
+            <p className="text-[11px] text-gray-400 mt-1">Genera el asiento contable automáticamente (ej: Publicidad, Energía Eléctrica, Ingresos Financieros)</p>
+          </Campo>
           {cuentasBanco.find(c => c.id === formTx.cuenta_banco_id)?.moneda === 'USD' && (
             <div className="grid grid-cols-2 gap-3">
               <Campo label="Monto USD">
@@ -863,6 +940,15 @@ export default function CajaBancosPage() {
           </Campo>
           <Campo label="Descripción *">
             <input className={inputCls} value={formMovCaja.descripcion} onChange={e => setFormMovCaja({...formMovCaja, descripcion: e.target.value})} placeholder="Concepto del movimiento" />
+          </Campo>
+          <Campo label={formMovCaja.tipo === 'egreso' ? 'Clasificación contable (¿qué se pagó?) *' : 'Clasificación contable (¿de dónde viene?) *'}>
+            <SelectorCuenta
+              cuentas={cuentasContables}
+              value={formMovCaja.cuenta_contrapartida_id}
+              onChange={id => setFormMovCaja({...formMovCaja, cuenta_contrapartida_id: id})}
+              preferTipo={formMovCaja.tipo === 'egreso' ? 'gasto' : 'ingreso'}
+            />
+            <p className="text-[11px] text-gray-400 mt-1">Genera el asiento contable automáticamente (ej: Publicidad, Energía Eléctrica, Multas)</p>
           </Campo>
           <Campo label="Notas">
             <textarea className={inputCls} rows={2} value={formMovCaja.notas} onChange={e => setFormMovCaja({...formMovCaja, notas: e.target.value})} />

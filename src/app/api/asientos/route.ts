@@ -33,11 +33,19 @@ export async function GET(request: Request) {
 
     const { data: detalle } = await supabase
       .from('asientos_detalle')
-      .select('*')
+      .select('*, plan_cuentas(codigo, nombre)')
       .eq('asiento_id', id)
       .order('orden')
 
-    return NextResponse.json({ asiento, detalle })
+    // La tabla no guarda código/nombre de cuenta; se resuelven vía join
+    // y se aplanan porque la UI del diario espera codigo_cuenta/nombre_cuenta.
+    const detalleConCuenta = (detalle || []).map((l: any) => ({
+      ...l,
+      codigo_cuenta: l.plan_cuentas?.codigo ?? '',
+      nombre_cuenta: l.plan_cuentas?.nombre ?? '',
+    }))
+
+    return NextResponse.json({ asiento, detalle: detalleConCuenta })
   }
 
   let query = supabase
@@ -104,10 +112,11 @@ export async function POST(request: Request) {
   }
 
   const { data: seqData, error: seqError } = await supabase
-    .rpc('next_numero_asiento', { p_empresa_id: empresaId })
+    .rpc('get_next_numero_asiento', { p_empresa_id: empresaId, p_anio: periodo_anio, p_mes: periodo_mes })
 
   if (seqError) return NextResponse.json({ error: seqError.message }, { status: 500 })
   const numero = seqData
+  const numeroAsiento = `AST-${String(periodo_anio).padStart(4, '0')}-${String(periodo_mes).padStart(2, '0')}-${String(numero).padStart(4, '0')}`
 
   const estado = contabilizar ? 'contabilizado' : 'borrador'
 
@@ -116,10 +125,12 @@ export async function POST(request: Request) {
     .insert({
       empresa_id: empresaId,
       numero,
+      numero_asiento: numeroAsiento,
       fecha,
       periodo_anio,
       periodo_mes,
       tipo,
+      descripcion: concepto,
       concepto,
       referencia_tipo: referencia_tipo || null,
       referencia_id: referencia_id || null,
@@ -127,7 +138,7 @@ export async function POST(request: Request) {
       total_debe: totalDebe,
       total_haber: totalHaber,
       estado,
-      creado_por: user.id,
+      created_by: user.id,
     })
     .select()
     .single()
@@ -138,8 +149,6 @@ export async function POST(request: Request) {
     asiento_id: asiento.id,
     empresa_id: empresaId,
     cuenta_id: l.cuenta_id,
-    codigo_cuenta: l.codigo_cuenta,
-    nombre_cuenta: l.nombre_cuenta,
     debe: parseFloat(l.debe) || 0,
     haber: parseFloat(l.haber) || 0,
     descripcion: l.descripcion || null,
@@ -169,7 +178,7 @@ export async function PATCH(request: Request) {
   if (action === 'contabilizar') {
     const { data, error } = await supabase
       .from('asientos_contables')
-      .update({ estado: 'contabilizado', updated_at: new Date().toISOString() })
+      .update({ estado: 'contabilizado' })
       .eq('id', id)
       .select()
       .single()
@@ -181,12 +190,7 @@ export async function PATCH(request: Request) {
   if (action === 'anular') {
     const { data, error } = await supabase
       .from('asientos_contables')
-      .update({
-        estado: 'anulado',
-        anulado_en: new Date().toISOString(),
-        anulado_por: user.id,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ estado: 'anulado' })
       .eq('id', id)
       .select()
       .single()
