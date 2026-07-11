@@ -61,6 +61,12 @@ export default function RegisterPage() {
   const [repEmail,     setRepEmail]     = useState("");
   const [repTelefono,  setRepTelefono]  = useState("");
 
+  // ── Datos DGI (comunes a ambos tipos) ───────────────
+  const [fechaInscripcionDgi,   setFechaInscripcionDgi]   = useState("");
+  const [actividadesEconomicas, setActividadesEconomicas] = useState("");
+  const [esExonerado,           setEsExonerado]           = useState(false);
+  const [tipoExoneracion,       setTipoExoneracion]       = useState("");
+
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
 
@@ -100,8 +106,33 @@ export default function RegisterPage() {
 
     const userId = authData.user.id;
 
+    // El régimen tributario determina qué reportes VET aplican a la empresa
+    // (ver /api/vet/[empresa_id]/reportes) — sin esto el módulo VET no funciona.
+    // "Cuota Fija" mapea a régimen Simplificado; el resto arranca en General
+    // (el régimen Especial, para exportadores/zona franca, se asigna después
+    // desde Configuración, ya que el registro no distingue ese caso).
+    const nombreRegimen = tipoEmpresa === "cuota_fija" ? "Simplificado" : "General";
+    const { data: regimen } = await supabase
+      .from("regimenes_tributarios")
+      .select("id")
+      .eq("nombre", nombreRegimen)
+      .eq("estado", "activo")
+      .maybeSingle();
+
     // 2. Guardar datos empresa
     let dbError = null;
+
+    const actividadesArray = actividadesEconomicas
+      .split(",")
+      .map(a => a.trim())
+      .filter(Boolean);
+
+    const datosDgi = {
+      fecha_inscripcion_dgi: fechaInscripcionDgi || null,
+      actividades_economicas: actividadesArray.length > 0 ? actividadesArray : null,
+      es_exonerado: esExonerado,
+      tipo_exoneracion: esExonerado ? (tipoExoneracion || null) : null,
+    };
 
     if (tipoEmpresa === "persona_juridica") {
       const { error } = await supabase.from("empresas_juridicas").insert({
@@ -120,6 +151,8 @@ export default function RegisterPage() {
         telefono_representante:     repTelefono,
         correo_electronico:         email,
         sitio_web:                  sitioWebJur || null,
+        regimen_tributario_id:      regimen?.id ?? null,
+        ...datosDgi,
         terminos_aceptados_en:      terminosAceptadosEn,
         terminos_version:           TERMINOS_VERSION,
       });
@@ -137,6 +170,8 @@ export default function RegisterPage() {
         correo_electronico: email,
         telefono,
         sitio_web:          sitioWeb || null,
+        regimen_tributario_id: regimen?.id ?? null,
+        ...datosDgi,
         terminos_aceptados_en: terminosAceptadosEn,
         terminos_version:      TERMINOS_VERSION,
       });
@@ -359,6 +394,40 @@ export default function RegisterPage() {
               </div>
             </>
           )}
+
+          {/* ── Datos DGI (opcional) ── */}
+          <div className="border-t border-slate-100 pt-5">
+            <p className="text-sm font-semibold text-slate-700 mb-1">
+              Datos DGI <span className="text-slate-400 font-normal">(opcional, puedes completarlos después)</span>
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+              <div>
+                <label className="label">Fecha de inscripción DGI</label>
+                <input type="date" className="input"
+                  value={fechaInscripcionDgi} onChange={e => setFechaInscripcionDgi(e.target.value)} />
+              </div>
+              <div>
+                <label className="label">Actividades económicas</label>
+                <input type="text" className="input" placeholder="Venta al por menor, Servicios de limpieza"
+                  value={actividadesEconomicas} onChange={e => setActividadesEconomicas(e.target.value)} />
+                <p className="text-xs text-slate-400 mt-1">Separadas por coma, como aparecen en tu RUC</p>
+              </div>
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+                    checked={esExonerado} onChange={e => setEsExonerado(e.target.checked)} />
+                  Mi empresa tiene una exoneración fiscal vigente
+                </label>
+              </div>
+              {esExonerado && (
+                <div className="md:col-span-2">
+                  <label className="label">Tipo de exoneración</label>
+                  <input type="text" className="input" placeholder="Ej: Ley de zonas francas, ONG, cuerpo diplomático..."
+                    value={tipoExoneracion} onChange={e => setTipoExoneracion(e.target.value)} />
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* ── Datos de acceso ── */}
           <div className="border-t border-slate-100 pt-5">

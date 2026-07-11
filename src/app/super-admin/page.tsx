@@ -2,8 +2,9 @@
 export const dynamic = "force-dynamic";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Ban, CheckCircle2, Eye, ShieldAlert, Trash2, X } from "lucide-react";
+import { Ban, CheckCircle2, Eye, LogOut, ShieldAlert, Trash2, X } from "lucide-react";
 
 interface Empresa {
   id: string;
@@ -41,6 +42,7 @@ interface UsuarioEmpresa {
 }
 
 export default function SuperAdminPage() {
+  const router = useRouter();
   const [autorizado, setAutorizado] = useState<boolean | null>(null);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +75,15 @@ export default function SuperAdminPage() {
   }, []);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  async function handleLogout() {
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    toast.success("Sesión cerrada");
+    router.push("/auth/login");
+    router.refresh();
+  }
 
   async function suspenderEmpresa(e: Empresa) {
     const razon = window.prompt(`Razón para suspender "${e.nombre}":`);
@@ -162,9 +173,14 @@ export default function SuperAdminPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 lg:p-8">
-      <div className="mb-8">
-        <h1 className="font-display text-2xl font-bold text-slate-900">Panel Super Admin</h1>
-        <p className="text-slate-500 text-sm mt-1">Empresas registradas en SARA</p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-slate-900">Panel Super Admin</h1>
+          <p className="text-slate-500 text-sm mt-1">Empresas registradas en SARA</p>
+        </div>
+        <button onClick={handleLogout} className="text-slate-500 hover:text-red-600 flex items-center gap-1.5 text-sm shrink-0">
+          <LogOut size={16} /> Cerrar sesión
+        </button>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200">

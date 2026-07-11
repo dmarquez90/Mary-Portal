@@ -88,6 +88,35 @@ function TabEmpresa({
     (natural?.inss_patronal_tasa ?? juridica?.inss_patronal_tasa ?? "0.225").toString()
   );
 
+  // Régimen tributario: determina qué reportes VET (DGI) aplican a la empresa.
+  const [regimenId, setRegimenId] = useState((natural?.regimen_tributario_id ?? juridica?.regimen_tributario_id ?? "") as string);
+  const [regimenes, setRegimenes] = useState<{ id: string; nombre: string; descripcion: string | null }[]>([]);
+
+  // Datos DGI (comunes a ambos tipos de empresa)
+  const [fechaInscripcionDgi, setFechaInscripcionDgi] = useState(
+    (natural?.fecha_inscripcion_dgi ?? juridica?.fecha_inscripcion_dgi ?? "") as string
+  );
+  const [actividadesEconomicas, setActividadesEconomicas] = useState(
+    (((natural as unknown as { actividades_economicas?: string[] })?.actividades_economicas
+      ?? (juridica as unknown as { actividades_economicas?: string[] })?.actividades_economicas
+      ?? []).join(", "))
+  );
+  const [esExonerado, setEsExonerado] = useState(
+    Boolean(natural?.es_exonerado ?? juridica?.es_exonerado ?? false)
+  );
+  const [tipoExoneracion, setTipoExoneracion] = useState(
+    (natural?.tipo_exoneracion ?? juridica?.tipo_exoneracion ?? "") as string
+  );
+
+  useEffect(() => {
+    (async () => {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data } = await supabase.from("regimenes_tributarios").select("id, nombre, descripcion").eq("estado", "activo").order("nombre");
+      setRegimenes(data ?? []);
+    })();
+  }, []);
+
   const [loading, setLoading] = useState(false);
 
   async function guardar() {
@@ -95,6 +124,13 @@ function TabEmpresa({
     setLoading(true);
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
+
+    const datosDgi = {
+      fecha_inscripcion_dgi: fechaInscripcionDgi || null,
+      actividades_economicas: actividadesEconomicas.split(",").map(a => a.trim()).filter(Boolean),
+      es_exonerado: esExonerado,
+      tipo_exoneracion: esExonerado ? (tipoExoneracion || null) : null,
+    };
 
     if (isJuridica) {
       const { error } = await supabase.from("empresas_juridicas").update({
@@ -106,6 +142,8 @@ function TabEmpresa({
         correo_electronico:         correoJur,
         sitio_web:                  webJur || null,
         inss_patronal_tasa:         Number(inssPatronal),
+        regimen_tributario_id:      regimenId || null,
+        ...datosDgi,
         updated_at:                 new Date().toISOString(),
       }).eq("id", empresa.id);
       if (error) { toast.error("Error: " + error.message); setLoading(false); return; }
@@ -121,6 +159,8 @@ function TabEmpresa({
         correo_electronico: correoNat,
         sitio_web:          webNat || null,
         inss_patronal_tasa: Number(inssPatronal),
+        regimen_tributario_id: regimenId || null,
+        ...datosDgi,
         updated_at:         new Date().toISOString(),
       }).eq("id", empresa.id);
       if (error) { toast.error("Error: " + error.message); setLoading(false); return; }
@@ -251,6 +291,54 @@ function TabEmpresa({
           </div>
         </div>
       )}
+
+      {/* Régimen tributario */}
+      <div className="pt-4 border-t border-slate-100">
+        <p className="text-sm font-semibold text-slate-700 mb-3">Régimen tributario</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="label">Régimen ante la DGI <span className="text-red-500">*</span></label>
+            <select className="input" value={regimenId} onChange={e => setRegimenId(e.target.value)}>
+              <option value="">Sin asignar</option>
+              {regimenes.map(r => <option key={r.id} value={r.id}>{r.nombre}{r.descripcion ? ` — ${r.descripcion}` : ""}</option>)}
+            </select>
+            <p className="text-xs text-slate-400 mt-1">
+              Determina qué reportes VET aplican a tu empresa. Sin esto, el módulo VET no puede generar reportes.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Datos DGI */}
+      <div className="pt-4 border-t border-slate-100">
+        <p className="text-sm font-semibold text-slate-700 mb-3">Datos DGI</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="label">Fecha de inscripción DGI</label>
+            <input type="date" className="input" value={fechaInscripcionDgi} onChange={e => setFechaInscripcionDgi(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Actividades económicas</label>
+            <input type="text" className="input" placeholder="Venta al por menor, Servicios de limpieza"
+              value={actividadesEconomicas} onChange={e => setActividadesEconomicas(e.target.value)} />
+            <p className="text-xs text-slate-400 mt-1">Separadas por coma, como aparecen en tu RUC</p>
+          </div>
+          <div className="md:col-span-2">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+                checked={esExonerado} onChange={e => setEsExonerado(e.target.checked)} />
+              Mi empresa tiene una exoneración fiscal vigente
+            </label>
+          </div>
+          {esExonerado && (
+            <div className="md:col-span-2">
+              <label className="label">Tipo de exoneración</label>
+              <input type="text" className="input" placeholder="Ej: Ley de zonas francas, ONG, cuerpo diplomático..."
+                value={tipoExoneracion} onChange={e => setTipoExoneracion(e.target.value)} />
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Parámetros de nómina */}
       <div className="pt-4 border-t border-slate-100">
