@@ -158,19 +158,22 @@ export function calcularEmpleadoPlanilla(
   // 1. Devengado
   const horaOrdinaria  = input.salarioBase / 240
   const valorHorasExtra = round2(input.horasExtra * horaOrdinaria * 2) // 100% recargo
-  const salarioBruto   = round2(
-    input.salarioBase
+
+  // 2. Ajuste proporcional SOLO sobre el salario base (FIX auditoría:
+  // antes se prorrateaban también horas extra, comisiones y bonos, que
+  // son montos ya devengados y no dependen de los días laborados)
+  const salarioBaseProporcional = round2(input.salarioBase * (input.diasTrabajados / 30))
+
+  const salarioBruto = round2(
+    salarioBaseProporcional
     + valorHorasExtra
     + input.comisiones
     + input.bonificaciones
     + input.otrosIngresos
   )
 
-  // 2. Ajuste proporcional si días trabajados < 30
-  const salarioProporcional = round2(salarioBruto * (input.diasTrabajados / 30))
-
-  // Para INSS y IR se usa salario proporcional si parcial
-  const baseCalculo = salarioProporcional
+  // Para INSS e IR se usa el bruto devengado del mes
+  const baseCalculo = salarioBruto
 
   // 3. INSS Laboral (7%) — deducción al empleado
   let inssLaboral = 0
@@ -246,7 +249,7 @@ export function calcularEmpleadoPlanilla(
  * Según Código del Trabajo Nicaragua:
  * - Vacaciones proporcionales: (días trabajados en el año) / 365 × 30 días
  * - Aguinaldo proporcional: (meses trabajados en el año) / 12 × salario_base
- * - Indemnización: solo si despido injustificado o negativa de reintegro
+ * - Indemnización: Art. 45 CT (ver nota sobre renuncia más abajo)
  */
 export function calcularLiquidacion(params: {
   salarioBase:          number
@@ -280,16 +283,25 @@ export function calcularLiquidacion(params: {
   // Aguinaldo proporcional (lo acumulado en provisión)
   const aguinaldoProporcional = round2(acumAguinaldoProvisión)
 
-  // Indemnización: aplica en despido injustificado, mutuo acuerdo, fin contrato, fallecimiento
-  const motivosConIndem = [
-    'despido_injustificado',
-    'mutuo_acuerdo',
-    'fin_contrato',
-    'fallecimiento',
-  ]
-  const indemnizacion = motivosConIndem.includes(motivoRetiro)
-    ? round2(acumIndemnizaciónProvisión)
-    : 0
+  // Indemnización por antigüedad (Art. 45 CT).
+  // FIX auditoría: se incluye 'renuncia' — el trabajador que renuncia
+  // cumpliendo el preaviso de 15 días (Art. 43 CT) conserva el derecho
+  // a la indemnización del Art. 45. Solo se pierde por despido con
+  // causa justa (Art. 48 CT) o abandono.
+  const motivosSinIndem = ['despido_justificado', 'abandono']
+  const indemnizacion = motivosSinIndem.includes(motivoRetiro)
+    ? 0
+    : round2(acumIndemnizaciónProvisión)
+
+  // IR sobre la liquidación (LCT Art. 19 num. 3):
+  // la indemnización está exenta hasta C$500,000; el exceso paga 10%
+  // como retención definitiva. Vacaciones y salario pendiente son
+  // rentas del trabajo gravables (se integran a la tabla progresiva;
+  // aquí se reportan para que el módulo de nómina las retenga).
+  const INDEM_EXENTA_TOPE = 500_000
+  const indemnizacionExenta   = round2(Math.min(indemnizacion, INDEM_EXENTA_TOPE))
+  const indemnizacionGravada  = round2(Math.max(0, indemnizacion - INDEM_EXENTA_TOPE))
+  const irIndemnizacion       = round2(indemnizacionGravada * 0.10)
 
   const total = round2(
     salarioPendiente
@@ -297,13 +309,18 @@ export function calcularLiquidacion(params: {
     + aguinaldoProporcional
     + indemnizacion
   )
+  const totalNeto = round2(total - irIndemnizacion)
 
   return {
     salarioPendiente,
     vacacionesPendientes,
     aguinaldoProporcional,
     indemnizacion,
+    indemnizacionExenta,
+    indemnizacionGravada,
+    irIndemnizacion,
     total,
+    totalNeto,
   }
 }
 

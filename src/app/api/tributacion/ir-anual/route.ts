@@ -46,16 +46,33 @@ export async function POST(req: NextRequest) {
 
     const renta_bruta = ventas?.reduce((s, f) => s + Number(f.subtotal ?? 0), 0) ?? 0
 
-    // ── Costo de ventas: compras recibidas/pagadas ────────────
-    const { data: compras } = await supabase
-      .from('compras')
-      .select('subtotal')
-      .eq('empresa_id', empresa_id)
-      .in('estado', ['recibida', 'pagada'])
-      .gte('fecha_compra', fechaInicio)
-      .lte('fecha_compra', fechaFin)
+    // ── Costo de ventas ───────────────────────────────────────
+    // FIX auditoría: se usa el COSTO DE VENTAS real de contabilidad
+    // (cuenta 5.1, alimentada por el costeo automático de cada venta),
+    // no el total de compras del año — comprar inventario no es costo
+    // hasta que se vende. Fallback a compras solo si no hay costeo.
+    let costo_ventas = 0
+    {
+      const { data: saldoCosto } = await supabase.rpc('get_saldos_multiple', {
+        p_empresa_id: empresa_id,
+        p_cuentas: ['5.1'],
+        p_fecha_inicio: fechaInicio,
+        p_fecha_fin: fechaFin,
+        p_acumulado: false,
+      })
+      costo_ventas = Number(saldoCosto ?? 0)
 
-    const costo_ventas = compras?.reduce((s, c) => s + Number(c.subtotal ?? 0), 0) ?? 0
+      if (costo_ventas <= 0) {
+        const { data: compras } = await supabase
+          .from('compras')
+          .select('subtotal')
+          .eq('empresa_id', empresa_id)
+          .in('estado', ['recibida', 'pagada'])
+          .gte('fecha_compra', fechaInicio)
+          .lte('fecha_compra', fechaFin)
+        costo_ventas = compras?.reduce((s, c) => s + Number(c.subtotal ?? 0), 0) ?? 0
+      }
+    }
 
     // ── Gastos de nómina del año ──────────────────────────────
     const { data: planillas } = await supabase
@@ -128,13 +145,36 @@ export async function POST(req: NextRequest) {
     const renta_neta_gravable = round2(renta_bruta - total_costos_gastos)
     const hay_perdida         = renta_neta_gravable < 0
 
-    // IR 30% solo si hay renta neta positiva
-    const ir_30_pct = hay_perdida ? 0 : round2(renta_neta_gravable * 0.30)
+    // ── Alícuota del IR (Art. 52 LCT) ─────────────────────────
+    // FIX auditoría: 30% plano solo aplica a contribuyentes con ingresos
+    // brutos anuales > C$12 millones. Con ingresos ≤ C$12M se usa la
+    // tarifa por estratos de renta neta (la alícuota del estrato se
+    // aplica sobre TODA la renta neta, no es marginal):
+    //   0–100,000 → 10% · 100,000.01–200,000 → 15%
+    //   200,000.01–350,000 → 20% · 350,000.01–500,000 → 25% · >500,000 → 30%
+    const alicuotaIR = (rentaNeta: number, ingresosBrutos: number): number => {
+      if (ingresosBrutos > 12_000_000) return 0.30
+      if (rentaNeta <= 100_000) return 0.10
+      if (rentaNeta <= 200_000) return 0.15
+      if (rentaNeta <= 350_000) return 0.20
+      if (rentaNeta <= 500_000) return 0.25
+      return 0.30
+    }
+    const tasa_ir   = hay_perdida ? 0 : alicuotaIR(renta_neta_gravable, renta_bruta)
+    const ir_30_pct = hay_perdida ? 0 : round2(renta_neta_gravable * tasa_ir)
 
-    // PMD 1% siempre sobre renta bruta si hay ingresos (Art. 61 LCT)
-    // Excepción: nuevos contribuyentes primeros 3 años, pérdidas continuadas
-    // SARA lo calcula y el usuario decide si aplica
-    const pago_minimo = renta_bruta > 0 ? round2(renta_bruta * 0.01) : 0
+    // PMD sobre renta bruta si hay ingresos (Art. 61 LCT / Ley 987)
+    // Alícuota configurable por empresa: 1% resto, 2% principales, 3% grandes
+    let pmd_tasa = 0.01
+    {
+      const [{ data: ejPmd }, { data: enPmd }] = await Promise.all([
+        supabase.from('empresas_juridicas').select('pmd_alicuota').eq('id', empresa_id).maybeSingle(),
+        supabase.from('empresas_persona_natural').select('pmd_alicuota').eq('id', empresa_id).maybeSingle(),
+      ])
+      const cfgPmd = Number(ejPmd?.pmd_alicuota ?? enPmd?.pmd_alicuota)
+      if (cfgPmd > 0 && cfgPmd <= 0.03) pmd_tasa = cfgPmd
+    }
+    const pago_minimo = renta_bruta > 0 ? round2(renta_bruta * pmd_tasa) : 0
 
     // IR a pagar: el mayor entre IR30% y PMD (solo si hay ingresos)
     // Con pérdida: ir_a_pagar = pago_minimo (PMD sigue siendo obligatorio sobre ingresos)

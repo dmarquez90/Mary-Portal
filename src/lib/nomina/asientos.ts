@@ -27,10 +27,39 @@ const COD_NOMINA = {
   // Activo (Débito al pagar nómina)
   BANCO_MN: '1.1.03',
   CAJA:     '1.1.01',
+
+  // FIX auditoría: cuentas para deducciones que antes descuadraban el asiento
+  ADELANTOS_EMPLEADOS: '1.1.13',  // Activo — recuperación de adelantos/préstamos
+  OTRAS_CXP:           '2.1.02',  // Pasivo — otros descuentos retenidos (embargos, etc.)
 } as const
 
 interface CuentaRef { id: string; nombre: string }
 type CuentasMap = Record<string, CuentaRef>
+
+/**
+ * Verifica si ya existe un asiento vigente para la referencia dada.
+ * FIX auditoría: antes crearAsientoPlanilla no verificaba duplicados y
+ * el flujo calcular→aprobar generaba DOS asientos de devengado.
+ */
+async function asientoExistente(
+  supabase: any,
+  empresaId: string,
+  referenciaTipo: string,
+  referenciaId: string,
+  tipo: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('asientos_contables')
+    .select('id')
+    .eq('empresa_id', empresaId)
+    .eq('referencia_tipo', referenciaTipo)
+    .eq('referencia_id', referenciaId)
+    .eq('tipo', tipo)
+    .neq('estado', 'anulado')
+    .limit(1)
+    .maybeSingle()
+  return data?.id ?? null
+}
 
 async function getCuentas(
   supabase: any,
@@ -55,17 +84,25 @@ async function getNextNumeroAsiento(
   anio: number,
   mes: number
 ): Promise<{ numero: number; numero_asiento: string }> {
-  const { data } = await supabase
-    .from('asientos_contables')
-    .select('numero')
-    .eq('empresa_id', empresaId)
-    .eq('periodo_anio', anio)
-    .eq('periodo_mes', mes)
-    .order('numero', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const numero = (data?.numero ?? 0) + 1
+  // FIX auditoría: RPC con advisory lock para evitar correlativos duplicados
+  let numero: number
+  const { data: rpcNum, error: rpcErr } = await supabase.rpc('get_next_numero_asiento', {
+    p_empresa_id: empresaId, p_anio: anio, p_mes: mes,
+  })
+  if (!rpcErr && typeof rpcNum === 'number' && rpcNum > 0) {
+    numero = rpcNum
+  } else {
+    const { data } = await supabase
+      .from('asientos_contables')
+      .select('numero')
+      .eq('empresa_id', empresaId)
+      .eq('periodo_anio', anio)
+      .eq('periodo_mes', mes)
+      .order('numero', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    numero = (data?.numero ?? 0) + 1
+  }
   const numero_asiento = `AST-${String(anio).padStart(4,'0')}-${String(mes).padStart(2,'0')}-${String(numero).padStart(4,'0')}`
   return { numero, numero_asiento }
 }
@@ -103,8 +140,6 @@ async function crearAsiento(
     supabase, empresaId, datos.anio, datos.mes
   )
 
-  // FIX 1: estado = 'aprobado' (no 'activo')
-  // FIX 2: descripcion es required, concepto es opcional
   const { data: asiento, error } = await supabase
     .from('asientos_contables')
     .insert({
@@ -120,7 +155,7 @@ async function crearAsiento(
       numero,
       periodo_anio:    datos.anio,
       periodo_mes:     datos.mes,
-      estado:          'aprobado',                 // FIX 1: valor válido
+      estado:          'aprobado',
       total_debe:      round2(totalDebe),
       total_haber:     round2(totalHaber),
     })
@@ -132,8 +167,6 @@ async function crearAsiento(
     return null
   }
 
-  // FIX 2: solo columnas que existen en asientos_detalle
-  // (sin codigo_cuenta ni nombre_cuenta)
   const detalles = datos.lineas.map((l, i) => ({
     asiento_id:  asiento.id,
     empresa_id:  empresaId,
@@ -177,6 +210,8 @@ async function crearAsiento(
  *   2.1.12 Vacaciones por Pagar           = total_prov_vacaciones
  *   2.1.13 Aguinaldo por Pagar            = total_prov_aguinaldo
  *   2.1.14 Indemnización por Pagar        = total_prov_indemnizacion
+ *   1.1.13 Adelantos a Empleados          = adelantos + préstamos (recuperación)
+ *   2.1.02 Otras CxP                      = otros descuentos retenidos
  */
 export async function crearAsientoPlanilla(
   supabase: any,
@@ -195,8 +230,17 @@ export async function crearAsientoPlanilla(
     total_prov_vacaciones:    number
     total_prov_aguinaldo:     number
     total_prov_indemnizacion: number
+    total_adelantos?:         number
+    total_prestamos_inss?:    number
+    total_otros_descuentos?:  number
   }
 ) {
+  // FIX auditoría: evitar asiento duplicado (flujo calcular → aprobar)
+  const existente = await asientoExistente(
+    supabase, empresaId, 'planilla', planilla.id, 'automatico_nomina'
+  )
+  if (existente) return existente
+
   const codigos = Object.values(COD_NOMINA)
   const cuentas = await getCuentas(supabase, empresaId, codigos)
 
@@ -233,6 +277,25 @@ export async function crearAsientoPlanilla(
   if (p.total_prov_aguinaldo     > 0) add(COD_NOMINA.AGUINALDO_PP,      0, p.total_prov_aguinaldo,     `Prov. aguinaldo por pagar ${per}`)
   if (p.total_prov_indemnizacion > 0) add(COD_NOMINA.INDEMNIZACION_PP,  0, p.total_prov_indemnizacion, `Prov. indemnización por pagar ${per}`)
 
+  // FIX auditoría: las deducciones al empleado (adelantos, préstamos INSS,
+  // otros descuentos) reducen el neto a pagar pero antes NO tenían línea de
+  // crédito → el asiento descuadraba y se descartaba en silencio.
+  const adelantos = round2((p.total_adelantos ?? 0) + (p.total_prestamos_inss ?? 0))
+  const otrosDesc = round2(p.total_otros_descuentos ?? 0)
+  if (adelantos > 0) add(COD_NOMINA.ADELANTOS_EMPLEADOS, 0, adelantos, `Recuperación adelantos/préstamos ${per}`)
+  if (otrosDesc > 0) add(COD_NOMINA.OTRAS_CXP,           0, otrosDesc, `Otros descuentos retenidos ${per}`)
+
+  // Ajuste residual de redondeo o deducciones no desglosadas: si aún queda
+  // diferencia (planillas antiguas sin las columnas nuevas), se lleva a la
+  // cuenta de adelantos para que el asiento siempre cuadre y sea visible.
+  const totalDebe  = round2(lineas.reduce((s, l) => s + l.debe,  0))
+  const totalHaber = round2(lineas.reduce((s, l) => s + l.haber, 0))
+  const diferencia = round2(totalDebe - totalHaber)
+  if (Math.abs(diferencia) > 0.01) {
+    if (diferencia > 0) add(COD_NOMINA.ADELANTOS_EMPLEADOS, 0, diferencia, `Deducciones vía planilla ${per}`)
+    else                add(COD_NOMINA.ADELANTOS_EMPLEADOS, -diferencia, 0, `Ajuste planilla ${per}`)
+  }
+
   return crearAsiento(supabase, empresaId, {
     fecha:           p.fecha_pago,
     descripcion:     `Planilla de sueldos — ${per}`,
@@ -266,6 +329,12 @@ export async function crearAsientoPagoNomina(
     forma_pago:       'banco' | 'caja'
   }
 ) {
+  // FIX auditoría: evitar doble asiento de pago
+  const existente = await asientoExistente(
+    supabase, empresaId, 'planilla', planilla.id, 'automatico_nomina_pago'
+  )
+  if (existente) return existente
+
   const ctaCreditoCod = planilla.forma_pago === 'banco' ? COD_NOMINA.BANCO_MN : COD_NOMINA.CAJA
   const codigos = [COD_NOMINA.SUELDOS_POR_PAGAR, ctaCreditoCod]
   const cuentas = await getCuentas(supabase, empresaId, codigos)

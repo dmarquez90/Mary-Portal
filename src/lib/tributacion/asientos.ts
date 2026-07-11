@@ -18,6 +18,7 @@ const COD = {
   ISC_POR_PAGAR:     '2.1.18',  // Pasivo — ISC por pagar
   GASTO_IMI:         '6.1.18',  // Gasto — IMI impuesto municipal
   GASTO_ISC:         '6.1.21',  // Gasto — ISC
+  GASTO_IR:          '6.4.01',  // Gasto — IR del ejercicio (FIX auditoría)
 } as const
 
 // ─── Helper: obtener número correlativo de asiento ───────────
@@ -27,17 +28,26 @@ async function getNumeroAsiento(
   anio: number,
   mes: number
 ): Promise<{ numero: number; numero_asiento: string }> {
-  const { data } = await supabase
-    .from('asientos_contables')
-    .select('numero')
-    .eq('empresa_id', empresaId)
-    .eq('periodo_anio', anio)
-    .eq('periodo_mes', mes)
-    .order('numero', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const numero = (data?.numero ?? 0) + 1
+  // FIX auditoría: usar el RPC con advisory lock (evita correlativos
+  // duplicados bajo concurrencia). Fallback al método anterior.
+  let numero: number
+  const { data: rpcNum, error: rpcErr } = await supabase.rpc('get_next_numero_asiento', {
+    p_empresa_id: empresaId, p_anio: anio, p_mes: mes,
+  })
+  if (!rpcErr && typeof rpcNum === 'number' && rpcNum > 0) {
+    numero = rpcNum
+  } else {
+    const { data } = await supabase
+      .from('asientos_contables')
+      .select('numero')
+      .eq('empresa_id', empresaId)
+      .eq('periodo_anio', anio)
+      .eq('periodo_mes', mes)
+      .order('numero', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    numero = (data?.numero ?? 0) + 1
+  }
   const numero_asiento =
     `AST-${String(anio).padStart(4,'0')}-${String(mes).padStart(2,'0')}-${String(numero).padStart(4,'0')}`
   return { numero, numero_asiento }
@@ -74,6 +84,19 @@ async function insertarAsiento(
   const fechaDate = new Date(fecha + 'T12:00:00')
   const anio = fechaDate.getFullYear()
   const mes  = fechaDate.getMonth() + 1
+
+  // FIX auditoría: evitar asientos duplicados por referencia
+  const { data: existente } = await supabase
+    .from('asientos_contables')
+    .select('id')
+    .eq('empresa_id', empresaId)
+    .eq('referencia_tipo', refTipo)
+    .eq('referencia_id', refId)
+    .eq('referencia_num', refNum)
+    .neq('estado', 'anulado')
+    .limit(1)
+    .maybeSingle()
+  if (existente?.id) return existente.id
 
   // Resolver UUIDs
   const lineasResueltas = await Promise.all(
@@ -245,11 +268,12 @@ export async function asientoImiPagado(
 // ============================================================
 // ASIENTO 3: IR Anual — liquidación final
 //
-// Al presentar la declaración:
-//   DB  2.1.04  IR por Pagar (Renta Anual)  = ir_a_pagar
-//   CR  1.1.10  IR Pagado por Anticipado     = anticipos_pagados
-//   CR  1.1.11  Retenciones IR a Favor       = retenciones_recibidas
-//   CR  2.1.04  IR por Pagar (saldo neto)    = ir_neto_pagar  (si queda saldo)
+// Al presentar la declaración (FIX auditoría — antes debitaba el
+// pasivo 2.1.04 y nunca reconocía el gasto):
+//   DB  6.4.01  Gasto IR del Ejercicio       = ir_a_pagar
+//   CR  1.1.10  IR Pagado por Anticipado     = anticipos aplicados
+//   CR  1.1.11  Retenciones IR a Favor       = retenciones aplicadas
+//   CR  2.1.04  IR por Pagar (saldo neto)    = saldo pendiente
 //
 // Al pagar el saldo del IR anual:
 //   DB  2.1.04  IR por Pagar                 = ir_neto_pagar
@@ -270,37 +294,47 @@ export async function asientoIRAnualLiquidacion(
 ): Promise<string | null> {
   const lineas: Array<{ codigo: string; debe: number; haber: number; desc: string }> = []
 
-  // DÉBITO: reconocer la obligación total de IR
+  // DÉBITO: gasto por IR del ejercicio (cuenta 6.4.01)
   lineas.push({
-    codigo: COD.IR_POR_PAGAR,
+    codigo: COD.GASTO_IR,
     debe: ir.ir_a_pagar, haber: 0,
-    desc: `IR anual ${ir.anio_fiscal} — obligación total`
+    desc: `Gasto IR anual ${ir.anio_fiscal} (Art. 52 LCT)`
   })
 
-  // CRÉDITO: aplicar anticipos pagados durante el año
-  if (ir.anticipos_pagados > 0) {
+  // CRÉDITOS: se acreditan anticipos y retenciones SOLO hasta cubrir el
+  // IR del año. Si pagaron de más, el excedente permanece como activo
+  // (saldo a favor trasladable — Art. 66 LCT), evitando que el asiento
+  // descuadre cuando anticipos + retenciones > IR anual.
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  let porCubrir = r2(ir.ir_a_pagar)
+
+  const anticiposAplicados = r2(Math.min(ir.anticipos_pagados ?? 0, porCubrir))
+  porCubrir = r2(porCubrir - anticiposAplicados)
+
+  const retencionesAplicadas = r2(Math.min(ir.retenciones_recibidas ?? 0, porCubrir))
+  porCubrir = r2(porCubrir - retencionesAplicadas)
+
+  if (anticiposAplicados > 0) {
     lineas.push({
       codigo: COD.IR_ANTICIPADO,
-      debe: 0, haber: ir.anticipos_pagados,
+      debe: 0, haber: anticiposAplicados,
       desc: `Anticipos IR ${ir.anio_fiscal} acreditados`
     })
   }
 
-  // CRÉDITO: aplicar retenciones recibidas de clientes
-  if (ir.retenciones_recibidas > 0) {
+  if (retencionesAplicadas > 0) {
     lineas.push({
       codigo: COD.RETENCIONES_FAVOR,
-      debe: 0, haber: ir.retenciones_recibidas,
+      debe: 0, haber: retencionesAplicadas,
       desc: `Retenciones IR a favor ${ir.anio_fiscal}`
     })
   }
 
-  // Si hay saldo neto a pagar, queda en 2.1.04 como pasivo pendiente
-  // El asiento cuadra: debe = anticipos + retenciones + saldo neto
-  if (ir.ir_neto_pagar > 0) {
+  // Saldo neto a pagar → pasivo 2.1.04
+  if (porCubrir > 0) {
     lineas.push({
       codigo: COD.IR_POR_PAGAR,
-      debe: 0, haber: ir.ir_neto_pagar,
+      debe: 0, haber: porCubrir,
       desc: `Saldo IR anual ${ir.anio_fiscal} pendiente de pago`
     })
   }

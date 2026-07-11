@@ -4,7 +4,6 @@ import {
   calcularEmpleadoPlanilla,
 } from '@/lib/nomina/calculos'
 import { getTasaInssPatronal } from '@/lib/nomina/empresa-config'
-import { crearAsientoPlanilla } from '@/lib/nomina/asientos'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -57,6 +56,8 @@ export async function POST(req: NextRequest) {
     total_inss_patronal:      0,
     total_inatec:             0,
     total_ir_laboral:         0,
+    total_adelantos:          0,
+    total_prestamos_inss:     0,
     total_otros_descuentos:   0,
     total_neto_pagar:         0,
     total_prov_vacaciones:    0,
@@ -91,6 +92,8 @@ export async function POST(req: NextRequest) {
     totales.total_inss_patronal      += resultado.inssPatronal
     totales.total_inatec             += resultado.inatec
     totales.total_ir_laboral         += resultado.irLaboral
+    totales.total_adelantos          += resultado.adelantos
+    totales.total_prestamos_inss     += resultado.prestamosInss
     totales.total_otros_descuentos   += resultado.otrosDescuentos
     totales.total_neto_pagar         += resultado.netoPagar
     totales.total_prov_vacaciones    += resultado.provVacaciones
@@ -213,27 +216,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Crear asiento contable de planilla (devengado) ──────────
-  try {
-    await crearAsientoPlanilla(supabase, empresa_id, {
-      id:                       planilla.id,
-      periodo_mes,
-      periodo_anio,
-      fecha_pago,
-      total_salarios_brutos:    totales.total_salarios_brutos,
-      total_inss_laboral:       totales.total_inss_laboral,
-      total_inss_patronal:      totales.total_inss_patronal,
-      total_inatec:             totales.total_inatec,
-      total_ir_laboral:         totales.total_ir_laboral,
-      total_neto_pagar:         totales.total_neto_pagar,
-      total_prov_vacaciones:    totales.total_prov_vacaciones,
-      total_prov_aguinaldo:     totales.total_prov_aguinaldo,
-      total_prov_indemnizacion: totales.total_prov_indemnizacion,
-    })
-  } catch (e) {
-    // Asiento fallido no revierte la planilla — se puede regenerar manualmente
-    console.error('Error generando asiento contable de planilla:', e)
-  }
+  // FIX auditoría: el asiento contable de devengado se crea al APROBAR la
+  // planilla (PATCH /api/nomina/planillas/[id], acción "aprobar"), no al
+  // calcularla. Antes se creaba aquí Y al aprobar → gasto duplicado.
 
   return NextResponse.json({ planilla, detalles: detallesCalculados }, { status: 201 })
 }

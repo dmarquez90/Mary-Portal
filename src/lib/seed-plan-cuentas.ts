@@ -30,6 +30,7 @@ export const PLAN_CUENTAS_NICARAGUA: CuentaBase[] = [
   { codigo: '1.1.10',   nombre: 'IR Pagado por Anticipado',        tipo: 'activo', naturaleza: 'deudora',   nivel: 3, permite_movimiento: true, descripcion: 'Anticipos IR mensual 1% (LCT art. 63)' },
   { codigo: '1.1.11',   nombre: 'Retenciones IR a Favor',          tipo: 'activo', naturaleza: 'deudora',   nivel: 3, permite_movimiento: true, descripcion: 'Retenciones en la fuente recibidas de clientes' },
   { codigo: '1.1.12',   nombre: 'Gastos Pagados por Anticipado',   tipo: 'activo', naturaleza: 'deudora',   nivel: 3, permite_movimiento: true },
+  { codigo: '1.1.13',   nombre: 'Adelantos y Préstamos a Empleados', tipo: 'activo', naturaleza: 'deudora', nivel: 3, permite_movimiento: true, descripcion: 'Adelantos salariales y préstamos recuperados vía planilla' },
 
   { codigo: '1.2',      nombre: 'Activo No Corriente',             tipo: 'activo', naturaleza: 'deudora',   nivel: 2, permite_movimiento: false},
   { codigo: '1.2.01',   nombre: 'Edificios e Instalaciones',       tipo: 'activo', naturaleza: 'deudora',   nivel: 3, permite_movimiento: true, descripcion: 'Dep. 5% anual (LCT art. 45 num 1a)' },
@@ -69,6 +70,7 @@ export const PLAN_CUENTAS_NICARAGUA: CuentaBase[] = [
   { codigo: '2.1.15',   nombre: 'IMI por Pagar (Alcaldía)',         tipo: 'pasivo', naturaleza: 'acreedora', nivel: 3, permite_movimiento: true, descripcion: '1% ingresos brutos mensual (Plan de Arbitrios)' },
   { codigo: '2.1.16',   nombre: 'Préstamos Bancarios C/P',         tipo: 'pasivo', naturaleza: 'acreedora', nivel: 3, permite_movimiento: true},
   { codigo: '2.1.17',   nombre: 'Anticipo de Clientes',            tipo: 'pasivo', naturaleza: 'acreedora', nivel: 3, permite_movimiento: true },
+  { codigo: '2.1.18',   nombre: 'ISC por Pagar',                   tipo: 'pasivo', naturaleza: 'acreedora', nivel: 3, permite_movimiento: true, descripcion: 'Impuesto Selectivo al Consumo por enterar a la DGI' },
 
   { codigo: '2.2',      nombre: 'Pasivo No Corriente',             tipo: 'pasivo', naturaleza: 'acreedora', nivel: 2, permite_movimiento: false},
   { codigo: '2.2.01',   nombre: 'Préstamos Bancarios L/P',         tipo: 'pasivo', naturaleza: 'acreedora', nivel: 3, permite_movimiento: true},
@@ -130,6 +132,7 @@ export const PLAN_CUENTAS_NICARAGUA: CuentaBase[] = [
   { codigo: '6.1.18',   nombre: 'IMI – Impuesto Municipal',        tipo: 'gasto', naturaleza: 'deudora', nivel: 3, permite_movimiento: true, descripcion: '1% ingresos brutos – deducible IR parcialmente' },
   { codigo: '6.1.19',   nombre: 'Comisiones y Gastos Bancarios',   tipo: 'gasto', naturaleza: 'deudora', nivel: 3, permite_movimiento: true },
   { codigo: '6.1.20',   nombre: 'Gastos de Viaje y Viáticos',      tipo: 'gasto', naturaleza: 'deudora', nivel: 3, permite_movimiento: true },
+  { codigo: '6.1.21',   nombre: 'ISC – Impuesto Selectivo al Consumo', tipo: 'gasto', naturaleza: 'deudora', nivel: 3, permite_movimiento: true, descripcion: 'ISC no acreditable (LCT arts. 149 y ss.)' },
   { codigo: '6.2',      nombre: 'Gastos Financieros',              tipo: 'gasto', naturaleza: 'deudora', nivel: 2, permite_movimiento: false },
   { codigo: '6.2.01',   nombre: 'Intereses Bancarios',             tipo: 'gasto', naturaleza: 'deudora', nivel: 3, permite_movimiento: true, descripcion: 'Deducible hasta 1.5x tasa prom BCN (LCT art. 48)' },
   { codigo: '6.2.02',   nombre: 'Pérdida Cambiaria',               tipo: 'gasto', naturaleza: 'deudora', nivel: 3, permite_movimiento: true },
@@ -137,6 +140,8 @@ export const PLAN_CUENTAS_NICARAGUA: CuentaBase[] = [
   { codigo: '6.3.01',   nombre: 'Multas y Recargos DGI',           tipo: 'gasto', naturaleza: 'deudora', nivel: 3, permite_movimiento: true, descripcion: 'No deducibles del IR (LCT art. 43)' },
   { codigo: '6.3.02',   nombre: 'Gastos Personales',               tipo: 'gasto', naturaleza: 'deudora', nivel: 3, permite_movimiento: true, descripcion: 'No deducibles del IR' },
   { codigo: '6.3.03',   nombre: 'Otros Gastos No Deducibles',      tipo: 'gasto', naturaleza: 'deudora', nivel: 3, permite_movimiento: true },
+  { codigo: '6.4',      nombre: 'Gasto por Impuesto sobre la Renta', tipo: 'gasto', naturaleza: 'deudora', nivel: 2, permite_movimiento: false, descripcion: 'IR anual del ejercicio (Art. 52 LCT). NO deducible para el propio IR.' },
+  { codigo: '6.4.01',   nombre: 'IR del Ejercicio',                tipo: 'gasto', naturaleza: 'deudora', nivel: 3, permite_movimiento: true, descripcion: 'Gasto por IR anual reconocido en la liquidación F-106' },
 ]
 
 // ── Función para insertar el plan en Supabase ──────────────

@@ -24,22 +24,25 @@ export interface LineaEstado {
 export const ESTRUCTURA_ESTADO_RESULTADOS: LineaEstado[] = [
   { codigo: 'I001', descripcion: 'Ventas Brutas', cuentas: ['4.1.01', '4.1.02', '4.1.03'], signo: -1, nivel: 1 },
   { codigo: 'I002', descripcion: 'Devoluciones y Descuentos en Ventas', cuentas: ['4.1.04', '4.1.05'], signo: 1, nivel: 1 },
-  { codigo: 'I003', descripcion: 'Ventas Netas', cuentas: [], signo: 1, esSubtotal: true, nivel: 0, componentes: ['I001', 'I002'] },
+  { codigo: 'I003', descripcion: 'Ventas Netas', cuentas: [], signo: 1, esSubtotal: true, nivel: 0, componentes: ['I001', '-I002'] },
   { codigo: 'I004', descripcion: 'Costo de Ventas / Costo de Producción', cuentas: ['5.1'], signo: 1, nivel: 1 },
-  { codigo: 'I005', descripcion: 'UTILIDAD BRUTA', cuentas: [], signo: 1, esSubtotal: true, nivel: 0, componentes: ['I003', 'I004'] },
+  { codigo: 'I005', descripcion: 'UTILIDAD BRUTA', cuentas: [], signo: 1, esSubtotal: true, nivel: 0, componentes: ['I003', '-I004'] },
   { codigo: 'G001', descripcion: 'Gastos de Personal (Sueldos, INSS, INATEC, Prestaciones)', cuentas: ['6.1.01', '6.1.02', '6.1.03', '6.1.04', '6.1.05', '6.1.06'], signo: 1, nivel: 1 },
   { codigo: 'G002', descripcion: 'Depreciación y Amortización (Art. 45 LCT)', cuentas: ['6.1.16', '6.1.17'], signo: 1, nivel: 1 },
-  { codigo: 'G003', descripcion: 'Otros Gastos de Operación', cuentas: ['6.1.07', '6.1.08', '6.1.09', '6.1.10', '6.1.11', '6.1.12', '6.1.13', '6.1.14', '6.1.15', '6.1.18', '6.1.19', '6.1.20'], signo: 1, nivel: 1 },
+  { codigo: 'G003', descripcion: 'Otros Gastos de Operación', cuentas: ['6.1.07', '6.1.08', '6.1.09', '6.1.10', '6.1.11', '6.1.12', '6.1.13', '6.1.14', '6.1.15', '6.1.18', '6.1.19', '6.1.20', '6.1.21'], signo: 1, nivel: 1 },
   { codigo: 'G005', descripcion: 'Total Gastos Operativos', cuentas: [], signo: 1, esSubtotal: true, nivel: 0, componentes: ['G001', 'G002', 'G003'] },
-  { codigo: 'G006', descripcion: 'UTILIDAD / PÉRDIDA OPERATIVA', cuentas: [], signo: 1, esSubtotal: true, nivel: 0, componentes: ['I005', 'G005'] },
+  { codigo: 'G006', descripcion: 'UTILIDAD / PÉRDIDA OPERATIVA', cuentas: [], signo: 1, esSubtotal: true, nivel: 0, componentes: ['I005', '-G005'] },
   { codigo: 'N001', descripcion: 'Ingresos Financieros y Otros No Operativos', cuentas: ['4.2.01', '4.2.02', '4.2.03'], signo: -1, nivel: 1 },
   { codigo: 'N002', descripcion: 'Gastos Financieros (Intereses y Diferencial Cambiario)', cuentas: ['6.2.01', '6.2.02'], signo: 1, nivel: 1 },
   { codigo: 'N005', descripcion: 'Gastos No Deducibles (multas, otros)', cuentas: ['6.3'], signo: 1, nivel: 1 },
-  { codigo: 'N006', descripcion: 'Total No Operativos Neto', cuentas: [], signo: 1, esSubtotal: true, nivel: 0, componentes: ['N001', 'N002', 'N005'] },
+  { codigo: 'N006', descripcion: 'Total No Operativos Neto', cuentas: [], signo: 1, esSubtotal: true, nivel: 0, componentes: ['N001', '-N002', '-N005'] },
   { codigo: 'R001', descripcion: 'UTILIDAD ANTES DE IR', cuentas: [], signo: 1, esSubtotal: true, nivel: 0, componentes: ['G006', 'N006'] },
-  { codigo: 'R002', descripcion: 'IR sobre la Renta (30% Personas Jurídicas - Art. 52 LCT)', cuentas: ['2.1.04'], signo: 1, nivel: 1 },
-  { codigo: 'R003', descripcion: 'Anticipos IR descontados (Art. 56 LCT)', cuentas: ['1.1.10'], signo: -1, nivel: 1 },
-  { codigo: 'R004', descripcion: 'UTILIDAD NETA DEL PERÍODO', cuentas: [], signo: 1, esTotal: true, nivel: 0, componentes: ['R001', 'R002', 'R003'] },
+  // FIX auditoría: el IR del período se lee de la cuenta de GASTO 6.4
+  // (IR del Ejercicio). Antes se usaban movimientos de 2.1.04 (pasivo) y
+  // se restaban los anticipos 1.1.10 (activo), lo que mezclaba cuentas de
+  // balance en el Estado de Resultados y descontaba los anticipos dos veces.
+  { codigo: 'R002', descripcion: 'Gasto por IR del Ejercicio (Art. 52 LCT)', cuentas: ['6.4'], signo: 1, nivel: 1 },
+  { codigo: 'R004', descripcion: 'UTILIDAD NETA DEL PERÍODO', cuentas: [], signo: 1, esTotal: true, nivel: 0, componentes: ['R001', '-R002'] },
 ]
 
 export const ESTRUCTURA_BALANCE_GENERAL = {
@@ -51,7 +54,7 @@ export const ESTRUCTURA_BALANCE_GENERAL = {
     { codigo: 'AC220', descripcion: 'Anticipos IR (Art. 56 LCT)', cuentas: ['1.1.10'], signo: 1 as const, nivel: 1 },
     { codigo: 'AC300', descripcion: 'IVA Crédito Fiscal (Art. 107 LCT)', cuentas: ['1.1.09'], signo: 1 as const, nivel: 1 },
     { codigo: 'AC400', descripcion: 'Inventarios', cuentas: ['1.1.08'], signo: 1 as const, nivel: 1 },
-    { codigo: 'AC500', descripcion: 'Gastos Pagados por Anticipado', cuentas: ['1.1.07', '1.1.12'], signo: 1 as const, nivel: 1 },
+    { codigo: 'AC500', descripcion: 'Gastos Pagados por Anticipado y Adelantos', cuentas: ['1.1.07', '1.1.12', '1.1.13'], signo: 1 as const, nivel: 1 },
     { codigo: 'AC999', descripcion: 'TOTAL ACTIVO CORRIENTE', cuentas: [] as string[], esSubtotal: true, nivel: 0, signo: 1 as const, componentes: ['AC100','AC200','AC210','AC220','AC300','AC400','AC500'] },
     { codigo: 'ANC001', descripcion: 'ACTIVO NO CORRIENTE', esSubtotal: true, nivel: 0, cuentas: [] as string[], signo: 1 as const },
     { codigo: 'ANC100', descripcion: 'Propiedad, Planta y Equipo (Bruto)', cuentas: ['1.2.01', '1.2.02', '1.2.03', '1.2.04', '1.2.05', '1.2.06'], signo: 1 as const, nivel: 1 },
@@ -69,11 +72,11 @@ export const ESTRUCTURA_BALANCE_GENERAL = {
     { codigo: 'PC100', descripcion: 'Cuentas por Pagar Proveedores', cuentas: ['2.1.01', '2.1.02'], signo: -1 as const, nivel: 1 },
     { codigo: 'PC200', descripcion: 'IVA por Pagar (Art. 104 LCT)', cuentas: ['2.1.03'], signo: -1 as const, nivel: 1 },
     { codigo: 'PC210', descripcion: 'Retenciones IR por Pagar (Art. 44 Reg. LCT)', cuentas: ['2.1.06', '2.1.11'], signo: -1 as const, nivel: 1 },
-    { codigo: 'PC220', descripcion: 'IR Anual por Pagar (30% - Art. 52 LCT)', cuentas: ['2.1.04'], signo: -1 as const, nivel: 1 },
+    { codigo: 'PC220', descripcion: 'IR Anual por Pagar (Art. 52 LCT)', cuentas: ['2.1.04'], signo: -1 as const, nivel: 1 },
     { codigo: 'PC300', descripcion: 'INSS Patronal/Laboral por Pagar (Ley 539)', cuentas: ['2.1.07', '2.1.08'], signo: -1 as const, nivel: 1 },
     { codigo: 'PC310', descripcion: 'INATEC por Pagar (2% - Ley INATEC)', cuentas: ['2.1.09'], signo: -1 as const, nivel: 1 },
     { codigo: 'PC400', descripcion: 'Préstamos Bancarios Corto Plazo', cuentas: ['2.1.16'], signo: -1 as const, nivel: 1 },
-    { codigo: 'PC500', descripcion: 'Otros Pasivos Corrientes', cuentas: ['2.1.05', '2.1.10', '2.1.12', '2.1.13', '2.1.14', '2.1.15', '2.1.17'], signo: -1 as const, nivel: 1 },
+    { codigo: 'PC500', descripcion: 'Otros Pasivos Corrientes', cuentas: ['2.1.05', '2.1.10', '2.1.12', '2.1.13', '2.1.14', '2.1.15', '2.1.17', '2.1.18'], signo: -1 as const, nivel: 1 },
     { codigo: 'PC999', descripcion: 'TOTAL PASIVO CORRIENTE', cuentas: [] as string[], esSubtotal: true, nivel: 0, signo: -1 as const, componentes: ['PC100','PC200','PC210','PC220','PC300','PC310','PC400','PC500'] },
     { codigo: 'PNC100', descripcion: 'Préstamos Bancarios Largo Plazo', cuentas: ['2.2.01', '2.2.02'], signo: -1 as const, nivel: 1 },
     { codigo: 'PNC200', descripcion: 'Prestaciones Sociales Acumuladas (Código del Trabajo)', cuentas: [] as string[], signo: -1 as const, nivel: 1 },
@@ -166,12 +169,24 @@ export async function calcularEstadoResultados(
     }
   }
 
-  const calcularComponente = (codigo: string, mapa: Record<string, number>): number => {
+  // Un componente puede llevar prefijo '-' para indicar que se resta del
+  // subtotal padre (ej. Utilidad Bruta = Ventas Netas - Costo de Ventas),
+  // independiente del `signo` de esa línea, que solo controla cómo se
+  // muestra su propio valor en la fila.
+  const calcularComponente = (ref: string, mapa: Record<string, number>): number => {
+    const esResta = ref.startsWith('-')
+    const codigo = esResta ? ref.slice(1) : ref
     const linea = ESTRUCTURA_ESTADO_RESULTADOS.find(l => l.codigo === codigo)
     if (!linea) return 0
-    if (linea.cuentas && linea.cuentas.length > 0) return mapa[codigo] || 0
-    if (!linea.componentes) return 0
-    return linea.componentes.reduce((sum, comp) => sum + calcularComponente(comp, mapa), 0)
+    let valor: number
+    if (linea.cuentas && linea.cuentas.length > 0) {
+      valor = mapa[codigo] || 0
+    } else if (linea.componentes) {
+      valor = linea.componentes.reduce((sum, comp) => sum + calcularComponente(comp, mapa), 0)
+    } else {
+      valor = 0
+    }
+    return esResta ? -valor : valor
   }
 
   for (const linea of ESTRUCTURA_ESTADO_RESULTADOS) {
@@ -299,33 +314,57 @@ export async function calcularFlujoEfectivo(
   fechaFin: Date
 ): Promise<{ secciones: unknown[], totales: Record<string, number> }> {
   const cuentasEfectivo = ['1.1.01', '1.1.02', '1.1.03', '1.1.04']
+
+  // FIX auditoría: la versión anterior tenía los signos invertidos en las
+  // cuentas acreedoras (CxP, IVA, préstamos, capital), usaba 3.2.03 para la
+  // utilidad (solo se mueve al cerrar el período → daba 0 en períodos
+  // abiertos), usaba 6.2.01 Intereses Bancarios como "pago de préstamos" y
+  // 4.2.02 (utilidad en venta, no el efectivo) como "venta de activos".
+  //
+  // Convención: getSaldoCuentas devuelve SUM(debe − haber).
+  //   Cuentas deudoras (activos): saldo + = aumentó.
+  //   Cuentas acreedoras (pasivo/patrimonio/ingreso): saldo − = aumentó.
   const [
-    utilidadNeta, depreciacion, amortizacion,
-    varCxC, varInventario, varCxP, varIVA, varRetenciones,
-    activosFijosCompra, activosFijosVenta,
-    prestamosRecibidos, prestamosPagados, aportesCapital,
+    sIngresos, sCostos, sGastos,
+    depreciacion, amortizacion, utilVentaActivos,
+    varCxC, varInventario, varCxPraw, varIVAraw, varRetraw,
+    varPPEraw, varPrestamosRaw, varCapitalRaw,
     efectivoInicio, efectivoFin,
   ] = await Promise.all([
-    getSaldoCuentas(supabase, empresaId, ['3.2.03'], fechaInicio, fechaFin),
+    getSaldoCuentas(supabase, empresaId, ['4'], fechaInicio, fechaFin),
+    getSaldoCuentas(supabase, empresaId, ['5'], fechaInicio, fechaFin),
+    getSaldoCuentas(supabase, empresaId, ['6'], fechaInicio, fechaFin),
     getSaldoCuentas(supabase, empresaId, ['6.1.16'], fechaInicio, fechaFin),
     getSaldoCuentas(supabase, empresaId, ['6.1.17'], fechaInicio, fechaFin),
+    getSaldoCuentas(supabase, empresaId, ['4.2.02'], fechaInicio, fechaFin),
     getSaldoCuentas(supabase, empresaId, ['1.1.05', '1.1.06'], fechaInicio, fechaFin),
     getSaldoCuentas(supabase, empresaId, ['1.1.08'], fechaInicio, fechaFin),
     getSaldoCuentas(supabase, empresaId, ['2.1.01', '2.1.02'], fechaInicio, fechaFin),
     getSaldoCuentas(supabase, empresaId, ['2.1.03'], fechaInicio, fechaFin),
     getSaldoCuentas(supabase, empresaId, ['2.1.06', '2.1.11'], fechaInicio, fechaFin),
     getSaldoCuentas(supabase, empresaId, ['1.2.01', '1.2.02', '1.2.03', '1.2.04', '1.2.05', '1.2.06'], fechaInicio, fechaFin),
-    getSaldoCuentas(supabase, empresaId, ['4.2.02'], fechaInicio, fechaFin),
-    getSaldoCuentas(supabase, empresaId, ['2.2.01', '2.2.02'], fechaInicio, fechaFin),
-    getSaldoCuentas(supabase, empresaId, ['6.2.01'], fechaInicio, fechaFin),
+    getSaldoCuentas(supabase, empresaId, ['2.1.16', '2.2.01', '2.2.02'], fechaInicio, fechaFin),
     getSaldoCuentas(supabase, empresaId, ['3.1.01'], fechaInicio, fechaFin),
     getSaldoCuentas(supabase, empresaId, cuentasEfectivo, new Date('2000-01-01'), new Date(fechaInicio.getTime() - 86400000), true),
     getSaldoCuentas(supabase, empresaId, cuentasEfectivo, new Date('2000-01-01'), fechaFin, true),
   ])
 
-  const operativas_netas = utilidadNeta + depreciacion + amortizacion - varCxC - varInventario + varCxP + varIVA + varRetenciones
-  const inversiones_netas = -activosFijosCompra + activosFijosVenta
-  const financiamiento_neto = prestamosRecibidos - prestamosPagados + aportesCapital
+  // Utilidad del período desde cuentas de resultado (funciona con el
+  // período abierto o cerrado, porque el cierre está excluido de 4/5/6)
+  const utilidadNeta = -sIngresos - sCostos - sGastos
+  const gananciaVentaActivos = -utilVentaActivos          // ingreso (acreedor)
+
+  const varCxP_cash  = -varCxPraw                          // aumento CxP → entra efectivo
+  const varIVA_cash  = -varIVAraw
+  const varRet_cash  = -varRetraw
+  const prestamosNeto = -varPrestamosRaw                   // aumento préstamos → entra efectivo
+  const aportesCapital = -varCapitalRaw                    // aumento capital → entra efectivo
+
+  const operativas_netas =
+    utilidadNeta + depreciacion + amortizacion - gananciaVentaActivos
+    - varCxC - varInventario + varCxP_cash + varIVA_cash + varRet_cash
+  const inversiones_netas   = -varPPEraw + gananciaVentaActivos
+  const financiamiento_neto = prestamosNeto + aportesCapital
   const variacion_neta = operativas_netas + inversiones_netas + financiamiento_neto
 
   return {
@@ -338,12 +377,13 @@ export async function calcularFlujoEfectivo(
           { descripcion: 'Ajustes por partidas que no afectan efectivo:', valor: null, esEncabezado: true },
           { descripcion: '  (+) Depreciación (Art. 45 LCT)', valor: depreciacion, ajuste: true },
           { descripcion: '  (+) Amortización de Intangibles', valor: amortizacion, ajuste: true },
+          { descripcion: '  (−) Utilidad en Venta de Activos Fijos', valor: -gananciaVentaActivos, ajuste: true },
           { descripcion: 'Cambios en Capital de Trabajo:', valor: null, esEncabezado: true },
           { descripcion: '  (Aumento) / Disminución en Cuentas por Cobrar', valor: -varCxC, ajuste: true },
           { descripcion: '  (Aumento) / Disminución en Inventarios', valor: -varInventario, ajuste: true },
-          { descripcion: '  Aumento / (Disminución) en Cuentas por Pagar', valor: varCxP, ajuste: true },
-          { descripcion: '  Aumento / (Disminución) en IVA por Pagar (Art. 104 LCT)', valor: varIVA, ajuste: true },
-          { descripcion: '  Aumento / (Disminución) en Retenciones por Pagar (Art. 44 Reg.)', valor: varRetenciones, ajuste: true },
+          { descripcion: '  Aumento / (Disminución) en Cuentas por Pagar', valor: varCxP_cash, ajuste: true },
+          { descripcion: '  Aumento / (Disminución) en IVA por Pagar (Art. 104 LCT)', valor: varIVA_cash, ajuste: true },
+          { descripcion: '  Aumento / (Disminución) en Retenciones por Pagar (Art. 44 Reg.)', valor: varRet_cash, ajuste: true },
         ],
         subtotal: operativas_netas,
         subtotalLabel: 'EFECTIVO NETO DE ACTIVIDADES OPERATIVAS'
@@ -352,8 +392,8 @@ export async function calcularFlujoEfectivo(
         titulo: 'B. ACTIVIDADES DE INVERSIÓN',
         referencia: 'NIIF PYMES Sección 7.16-7.17',
         items: [
-          { descripcion: '  Compra de Propiedad, Planta y Equipo', valor: -activosFijosCompra, ajuste: true },
-          { descripcion: '  Ventas de Activos Fijos', valor: activosFijosVenta, ajuste: true },
+          { descripcion: '  (Compra) / Venta neta de Propiedad, Planta y Equipo', valor: -varPPEraw, ajuste: true },
+          { descripcion: '  Utilidad realizada en venta de activos', valor: gananciaVentaActivos, ajuste: true },
         ],
         subtotal: inversiones_netas,
         subtotalLabel: 'EFECTIVO NETO DE ACTIVIDADES DE INVERSIÓN'
@@ -362,8 +402,7 @@ export async function calcularFlujoEfectivo(
         titulo: 'C. ACTIVIDADES DE FINANCIAMIENTO',
         referencia: 'NIIF PYMES Sección 7.18-7.19',
         items: [
-          { descripcion: '  Préstamos Bancarios Recibidos', valor: prestamosRecibidos, ajuste: true },
-          { descripcion: '  Pago de Préstamos Bancarios', valor: -prestamosPagados, ajuste: true },
+          { descripcion: '  Préstamos Bancarios (recibidos − amortizados)', valor: prestamosNeto, ajuste: true },
           { descripcion: '  Aportes de Capital', valor: aportesCapital, ajuste: true },
         ],
         subtotal: financiamiento_neto,

@@ -88,6 +88,13 @@ function TabEmpresa({
     (natural?.inss_patronal_tasa ?? juridica?.inss_patronal_tasa ?? "0.225").toString()
   );
 
+  // Alícuota PMD / anticipo IR (Ley 987): 1% resto, 2% principales, 3% grandes
+  const [pmdAlicuota, setPmdAlicuota] = useState(
+    ((natural as unknown as { pmd_alicuota?: number })?.pmd_alicuota
+      ?? (juridica as unknown as { pmd_alicuota?: number })?.pmd_alicuota
+      ?? "0.01").toString()
+  );
+
   // Régimen tributario: determina qué reportes VET (DGI) aplican a la empresa.
   const [regimenId, setRegimenId] = useState((natural?.regimen_tributario_id ?? juridica?.regimen_tributario_id ?? "") as string);
   const [regimenes, setRegimenes] = useState<{ id: string; nombre: string; descripcion: string | null }[]>([]);
@@ -142,6 +149,7 @@ function TabEmpresa({
         correo_electronico:         correoJur,
         sitio_web:                  webJur || null,
         inss_patronal_tasa:         Number(inssPatronal),
+        pmd_alicuota:               Number(pmdAlicuota),
         regimen_tributario_id:      regimenId || null,
         ...datosDgi,
         updated_at:                 new Date().toISOString(),
@@ -159,6 +167,7 @@ function TabEmpresa({
         correo_electronico: correoNat,
         sitio_web:          webNat || null,
         inss_patronal_tasa: Number(inssPatronal),
+        pmd_alicuota:       Number(pmdAlicuota),
         regimen_tributario_id: regimenId || null,
         ...datosDgi,
         updated_at:         new Date().toISOString(),
@@ -353,6 +362,18 @@ function TabEmpresa({
             <p className="text-xs text-slate-400 mt-1">
               Decreto 06-2019, reforma al reglamento de la Ley 539 de Seguridad Social.
               Se aplica al calcular nuevas planillas.
+            </p>
+          </div>
+          <div>
+            <label className="label">Alícuota PMD / Anticipo IR mensual</label>
+            <select className="input" value={pmdAlicuota} onChange={e => setPmdAlicuota(e.target.value)}>
+              <option value="0.01">1% — resto de contribuyentes</option>
+              <option value="0.02">2% — principales contribuyentes</option>
+              <option value="0.03">3% — grandes contribuyentes</option>
+            </select>
+            <p className="text-xs text-slate-400 mt-1">
+              Pago Mínimo Definitivo según categoría asignada por la DGI (Ley 987).
+              Se usa al calcular el anticipo IR mensual y el PMD del F-106.
             </p>
           </div>
         </div>

@@ -53,15 +53,28 @@ export async function POST(req: NextRequest) {
     ingresos = facturas?.reduce((s: number, f: { subtotal: number }) => s + Number(f.subtotal ?? 0), 0) ?? 0
   }
 
-  const tasa            = 0.01
+  // FIX auditoría: alícuota PMD configurable por empresa (Ley 987):
+  // 1% resto de contribuyentes, 2% principales, 3% grandes.
+  let tasa = 0.01
+  {
+    const [{ data: ej }, { data: en }] = await Promise.all([
+      supabase.from('empresas_juridicas').select('pmd_alicuota').eq('id', empresa_id).maybeSingle(),
+      supabase.from('empresas_persona_natural').select('pmd_alicuota').eq('id', empresa_id).maybeSingle(),
+    ])
+    const cfg = Number(ej?.pmd_alicuota ?? en?.pmd_alicuota)
+    if (cfg > 0 && cfg <= 0.03) tasa = cfg
+  }
+
   const monto_anticipo  = Math.round(ingresos * tasa * 100) / 100
   const retenciones     = Number(body.retenciones_recibidas ?? 0)
   const monto_a_pagar   = Math.max(0, Math.round((monto_anticipo - retenciones) * 100) / 100)
 
-  // Vencimiento: día 5 del mes siguiente (LCT Art. 64)
+  // FIX auditoría: el anticipo IR se declara en la DMI dentro de los
+  // primeros 15 días del mes siguiente (el plazo de 5 días aplica a las
+  // retenciones en la fuente, no al anticipo).
   const mesSig  = mes === 12 ? 1 : mes + 1
   const anioSig = mes === 12 ? anio + 1 : anio
-  const fecha_vencimiento = `${anioSig}-${String(mesSig).padStart(2, '0')}-05`
+  const fecha_vencimiento = `${anioSig}-${String(mesSig).padStart(2, '0')}-15`
 
   const { data, error } = await supabase
     .from('anticipos_ir')

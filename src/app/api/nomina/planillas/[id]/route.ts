@@ -1,6 +1,6 @@
-﻿import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { crearAsientoPlanilla } from '@/lib/nomina/asientos'
+import { crearAsientoPlanilla, crearAsientoPagoNomina } from '@/lib/nomina/asientos'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -50,6 +50,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!planilla) return NextResponse.json({ error: 'Planilla no encontrada' }, { status: 404 })
 
   if (accion === 'aprobar') {
+    // crearAsientoPlanilla verifica duplicados internamente (FIX auditoría):
+    // si el asiento de devengado ya existe, devuelve el existente.
     const asientoId = await crearAsientoPlanilla(supabase, empresa_id, {
       ...planilla,
       fecha_pago: fecha_pago || planilla.fecha_pago || new Date().toISOString().split('T')[0],
@@ -66,6 +68,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .select()
       .single()
 
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data)
+  }
+
+  // FIX auditoría: registrar el pago de la nómina (antes crearAsientoPagoNomina
+  // existía pero nunca se llamaba, y el pago no tocaba caja/banco en libros)
+  if (accion === 'pagar') {
+    if (planilla.estado !== 'aprobada') {
+      return NextResponse.json({ error: 'La planilla debe estar aprobada antes de pagarse' }, { status: 409 })
+    }
+
+    await crearAsientoPagoNomina(supabase, empresa_id, {
+      id:               planilla.id,
+      periodo_mes:      planilla.periodo_mes,
+      periodo_anio:     planilla.periodo_anio,
+      fecha_pago:       fecha_pago || planilla.fecha_pago || new Date().toISOString().split('T')[0],
+      total_neto_pagar: Number(planilla.total_neto_pagar ?? 0),
+      forma_pago:       forma_pago === 'caja' ? 'caja' : 'banco',
+    })
+
+    const { data, error } = await supabase
+      .from('planillas')
+      .update({ estado: 'pagada', updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data)
   }

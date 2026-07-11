@@ -158,7 +158,7 @@ export default function PosPage() {
   }
 
   const subtotal = carrito.reduce((s, i) => s + i.cantidad * i.precio_unitario, 0);
-  const ivaTotal = carrito.reduce((s, i) => s + (i.aplica_iva ? i.cantidad * i.precio_unitario * IVA_NICARAGUA : 0), 0);
+  const ivaTotal = carrito.reduce((s, i) => s + (i.aplica_iva ? Math.round(i.cantidad * i.precio_unitario * IVA_NICARAGUA * 100) / 100 : 0), 0); // redondeo por línea (FIX auditoría)
   const total = subtotal + ivaTotal;
   const cambio = tipoPago === "contado" && montoRecibido
     ? Math.max(Number(montoRecibido) - total, 0)
@@ -229,7 +229,7 @@ export default function PosPage() {
         cliente: cliente?.nombre ?? "Consumidor final",
         items: carrito.map(i => {
           const sub = i.cantidad * i.precio_unitario;
-          const iva = i.aplica_iva ? sub * IVA_NICARAGUA : 0;
+          const iva = i.aplica_iva ? Math.round(sub * IVA_NICARAGUA * 100) / 100 : 0; // redondeo por línea (FIX auditoría)
           return {
             descripcion: i.descripcion,
             cantidad: i.cantidad,

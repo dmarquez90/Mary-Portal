@@ -134,7 +134,7 @@ export default function NuevaFacturaPage() {
 
   const calcLinea = (l: Linea) => {
     const sub = l.cantidad * l.precio_unitario * (1 - l.descuento_pct / 100);
-    const iva = l.aplica_iva ? sub * IVA_NICARAGUA : 0;
+    const iva = l.aplica_iva ? Math.round(sub * IVA_NICARAGUA * 100) / 100 : 0; // redondeo por línea (FIX auditoría)
     return { sub, iva, total: sub + iva };
   };
 

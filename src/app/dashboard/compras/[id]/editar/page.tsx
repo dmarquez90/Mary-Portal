@@ -8,7 +8,7 @@ import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { IVA_NICARAGUA } from "@/types";
 import type { Proveedor, Producto } from "@/types";
-import { CODIGOS_RETENCION, getCodigoRetencion } from "@/lib/tributacion/retenciones-catalogo";
+import { CODIGOS_RETENCION, getCodigoRetencion, calcularRetencion } from "@/lib/tributacion/retenciones-catalogo";
 
 interface Linea {
   producto_id: string;
@@ -266,8 +266,11 @@ export default function EditarCompraPage() {
   const ivaTotal    = lineas.reduce((s, l) => s + calcLinea(l).iva, 0);
   const total       = subtotal + ivaTotal;
   // ── Retención IR según el código del catálogo DGI seleccionado ──
+  // FIX auditoría: se aplica el umbral legal (Art. 44 num. 2.2 Regl. LCT):
+  // la retención 2% sobre bienes y servicios en general solo aplica a
+  // operaciones mayores a C$1,000 (calcularRetencion devuelve 0 debajo).
   const retencionSel = getCodigoRetencion(retencionCodigo);
-  const retencionIR  = retencionSel ? Math.round(subtotal * retencionSel.alicuota * 100) / 100 : 0;
+  const retencionIR  = calcularRetencion(retencionCodigo, subtotal);
   const totalPagar   = total - retencionIR;
 
   async function handleSave(estado: "borrador" | "recibida") {

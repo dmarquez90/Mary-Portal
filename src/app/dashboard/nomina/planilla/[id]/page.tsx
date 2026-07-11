@@ -94,6 +94,24 @@ export default function DetallePlanillaPage() {
     setAprobando(false)
   }
 
+  async function registrarPago(formaPago: 'banco' | 'caja') {
+    if (!data || !empresaId) return
+    setAprobando(true)
+    await fetch(`/api/nomina/planillas/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accion:     'pagar',
+        empresa_id: empresaId,
+        forma_pago: formaPago,
+        fecha_pago: new Date().toISOString().split('T')[0],
+      }),
+    })
+    const res2 = await fetch(`/api/nomina/planillas/${id}`)
+    setData(await res2.json())
+    setAprobando(false)
+  }
+
   function exportarExcel() {
     if (!data) return
     const { planilla, detalles } = data
@@ -183,6 +201,18 @@ export default function DetallePlanillaPage() {
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
               <CheckCircle size={14} /> {aprobando ? 'Aprobando…' : 'Aprobar y contabilizar'}
             </button>
+          )}
+          {planilla.estado === 'aprobada' && (
+            <>
+              <button onClick={() => registrarPago('banco')} disabled={aprobando}
+                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+                <CheckCircle size={14} /> {aprobando ? 'Registrando…' : 'Pagar por banco'}
+              </button>
+              <button onClick={() => registrarPago('caja')} disabled={aprobando}
+                className="flex items-center gap-2 border border-green-600 text-green-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-50 disabled:opacity-50">
+                {aprobando ? 'Registrando…' : 'Pagar por caja'}
+              </button>
+            </>
           )}
         </div>
       </div>
