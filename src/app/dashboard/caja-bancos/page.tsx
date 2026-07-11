@@ -676,8 +676,8 @@ export default function CajaBancosPage() {
                       </td>
                       <td className="px-4 py-2.5 text-gray-700 max-w-[200px] truncate">{t.descripcion}</td>
                       <td className="px-4 py-2.5 text-gray-500 text-xs font-mono">{t.referencia || '—'}</td>
-                      <td className={`px-4 py-2.5 text-right font-semibold ${(t.direccion ? t.direccion === 'entrada' : ['ingreso','deposito','cobro','transferencia'].includes(t.tipo)) ? 'text-green-700' : 'text-red-700'}`}>
-                        {(t.direccion ? t.direccion === 'entrada' : ['ingreso','deposito','cobro','transferencia'].includes(t.tipo)) ? '+' : '-'}{fmt(t.monto, t.cuentas_banco?.moneda)}
+                      <td className={`px-4 py-2.5 text-right font-semibold ${(t.direccion ? t.direccion === 'entrada' : ['ingreso','deposito','cobro','transferencia','tarjeta','tarjeta_debito','tarjeta_credito'].includes(t.tipo)) ? 'text-green-700' : 'text-red-700'}`}>
+                        {(t.direccion ? t.direccion === 'entrada' : ['ingreso','deposito','cobro','transferencia','tarjeta','tarjeta_debito','tarjeta_credito'].includes(t.tipo)) ? '+' : '-'}{fmt(t.monto, t.cuentas_banco?.moneda)}
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${TIPO_BADGE[t.estado] || 'bg-gray-100 text-gray-600'}`}>{t.estado}</span>

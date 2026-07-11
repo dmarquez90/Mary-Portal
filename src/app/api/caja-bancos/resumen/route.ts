@@ -29,8 +29,8 @@ export async function GET() {
   ] = await Promise.all([
     supabase.from('cuentas_banco').select('*').eq('empresa_id', empresaId).eq('activa', true).order('created_at'),
     supabase.from('cuentas_caja').select('*').eq('empresa_id', empresaId).eq('activa', true).order('created_at'),
-    supabase.from('transacciones_banco').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').gte('fecha', mesStr),
-    supabase.from('transacciones_banco').select('monto').eq('empresa_id', empresaId).eq('tipo', 'egreso').gte('fecha', mesStr),
+    supabase.from('transacciones_banco').select('monto').eq('empresa_id', empresaId).eq('direccion', 'entrada').gte('fecha', mesStr),
+    supabase.from('transacciones_banco').select('monto').eq('empresa_id', empresaId).eq('direccion', 'salida').gte('fecha', mesStr),
     supabase.from('movimientos_caja').select('tipo, monto').eq('empresa_id', empresaId).eq('estado', 'registrado').gte('fecha', mesStr),
     supabase.from('cheques').select('id').eq('empresa_id', empresaId).eq('estado', 'activo'),
   ])
