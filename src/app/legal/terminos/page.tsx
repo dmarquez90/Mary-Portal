@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Términos y Condiciones | SARA",
+  title: "Términos y Condiciones | Siconic",
 };
 
 const VERSION = "1.0";
@@ -31,8 +31,8 @@ export default function TerminosPage() {
         Estos Términos y Condiciones ("Términos") constituyen un contrato vinculante entre
         usted ("el Usuario") y <strong>Marquez Project Solutions LLC</strong>, empresa
         constituida en el Estado de California, Estados Unidos ("la Empresa", "nosotros"),
-        propietaria y operadora del sistema SARA / FacturaNIC ("SARA" o "el Servicio"). Al
-        crear una cuenta o usar SARA de cualquier forma, usted declara haber leído, entendido
+        propietaria y operadora del sistema Siconic / FacturaNIC ("Siconic" o "el Servicio"). Al
+        crear una cuenta o usar Siconic de cualquier forma, usted declara haber leído, entendido
         y aceptado estos Términos y nuestra{" "}
         <a href="/legal/privacidad" className="text-brand-700 underline">
           Política de Privacidad
@@ -42,10 +42,10 @@ export default function TerminosPage() {
 
       <H2>1. Descripción del Servicio</H2>
       <P>
-        SARA es una herramienta de software como servicio (SaaS) que ayuda a negocios
+        Siconic es una herramienta de software como servicio (SaaS) que ayuda a negocios
         nicaragüenses a organizar su facturación, compras, inventario, nómina y registros
         contables, y a generar reportes de apoyo relacionados con la normativa de la
-        Dirección General de Ingresos (DGI) de Nicaragua. SARA es una herramienta de
+        Dirección General de Ingresos (DGI) de Nicaragua. Siconic es una herramienta de
         productividad de uso interno del Usuario; no presenta declaraciones, no realiza
         trámites ni transmite información en nombre del Usuario ante la DGI, la Alcaldía,
         el INSS ni ninguna otra autoridad. Toda presentación, declaración o trámite ante
@@ -54,7 +54,7 @@ export default function TerminosPage() {
 
       <H2>2. Registro de Cuenta</H2>
       <P>
-        Para usar SARA debe crear una cuenta proporcionando información veraz, completa y
+        Para usar Siconic debe crear una cuenta proporcionando información veraz, completa y
         actualizada (incluyendo, según el tipo de contribuyente, nombre o razón social,
         cédula, RUC y datos de contacto). Usted es responsable de mantener la
         confidencialidad de su contraseña y de toda actividad realizada bajo su cuenta.
@@ -63,7 +63,7 @@ export default function TerminosPage() {
       </P>
 
       <H2>3. Uso Permitido y Conductas Prohibidas</H2>
-      <P>Usted se compromete a no usar SARA para:</P>
+      <P>Usted se compromete a no usar Siconic para:</P>
       <Ul>
         <li>Ingresar, almacenar o transmitir información falsa con el fin de evadir o defraudar al fisco o a terceros.</li>
         <li>Intentar vulnerar la seguridad del Servicio, acceder a datos de otros usuarios o realizar ingeniería inversa del software.</li>
@@ -78,11 +78,11 @@ export default function TerminosPage() {
 
       <H2>4. Descargo de Responsabilidad Fiscal, Contable y Legal</H2>
       <P>
-        SARA calcula valores referenciales de IVA, retenciones, ISC y otros conceptos
+        Siconic calcula valores referenciales de IVA, retenciones, ISC y otros conceptos
         tributarios <strong>con base en parámetros configurados o ingresados por el propio
-        Usuario</strong>. SARA no constituye asesoría contable, fiscal, laboral ni legal, y
+        Usuario</strong>. Siconic no constituye asesoría contable, fiscal, laboral ni legal, y
         no sustituye el criterio de un contador público autorizado (CPA) ni de un abogado.
-        La Empresa no garantiza que los cálculos, reportes o formatos generados por SARA
+        La Empresa no garantiza que los cálculos, reportes o formatos generados por Siconic
         sean exactos, estén actualizados conforme a reformas normativas recientes, o sean
         suficientes para cumplir con las obligaciones fiscales, laborales o mercantiles del
         Usuario ante la DGI, el INSS, la Alcaldía o cualquier otra entidad. Es
@@ -97,12 +97,12 @@ export default function TerminosPage() {
         La Empresa no será responsable por multas, recargos, intereses moratorios,
         sanciones, auditorías, pérdidas económicas ni ningún otro perjuicio derivado de
         errores, omisiones o del uso que el Usuario haga de la información generada por
-        SARA.
+        Siconic.
       </P>
 
       <H2>5. Datos de Terceros Ingresados por el Usuario</H2>
       <P>
-        Si el Usuario ingresa en SARA datos personales de sus propios clientes, proveedores,
+        Si el Usuario ingresa en Siconic datos personales de sus propios clientes, proveedores,
         empleados o representantes (por ejemplo, nombre, cédula o RUC), el Usuario actúa
         como responsable de ese tratamiento frente a dichos terceros, y garantiza contar con
         la base legal y, cuando corresponda, el consentimiento necesario para ingresar esa
@@ -113,7 +113,7 @@ export default function TerminosPage() {
 
       <H2>6. Planes, Precios y Disponibilidad</H2>
       <P>
-        Actualmente SARA se ofrece de forma gratuita. La Empresa se reserva el derecho de
+        Actualmente Siconic se ofrece de forma gratuita. La Empresa se reserva el derecho de
         introducir en el futuro planes de pago, límites de uso o funciones exclusivas para
         cuentas pagas, notificando a los Usuarios con al menos 15 días de anticipación antes
         de que dichos cambios afecten una cuenta existente. El Servicio se ofrece "tal cual"
@@ -123,10 +123,10 @@ export default function TerminosPage() {
 
       <H2>7. Propiedad Intelectual</H2>
       <P>
-        El software, diseño, marca "SARA" y demás elementos del Servicio son propiedad de la
+        El software, diseño, marca "Siconic" y demás elementos del Servicio son propiedad de la
         Empresa o de sus licenciantes y están protegidos por leyes de propiedad intelectual.
         El Usuario conserva la titularidad de los datos e información de su negocio que
-        ingresa en SARA. El Usuario otorga a la Empresa una licencia limitada para almacenar,
+        ingresa en Siconic. El Usuario otorga a la Empresa una licencia limitada para almacenar,
         procesar y mostrar esa información con el único fin de operar y mantener el
         Servicio.
       </P>

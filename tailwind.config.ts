@@ -22,9 +22,16 @@ const config: Config = {
           900: "#172554",
         },
         accent: {
-          DEFAULT: "#f59e0b",
+          50:  "#fffbeb",
           light: "#fef3c7",
+          DEFAULT: "#f59e0b",
           dark:  "#d97706",
+          700: "#b45309",
+        },
+        glow: {
+          DEFAULT: "#6366f1",
+          light: "#818cf8",
+          dark: "#4338ca",
         },
         surface: {
           DEFAULT: "#f8fafc",
@@ -40,6 +47,25 @@ const config: Config = {
       boxShadow: {
         card: "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06)",
         modal:"0 20px 60px -10px rgb(0 0 0 / 0.25)",
+        soft: "0 8px 30px -8px rgb(30 58 138 / 0.15)",
+        glow: "0 0 40px -8px rgb(99 102 241 / 0.45)",
+        "glow-amber": "0 0 40px -8px rgb(245 158 11 / 0.5)",
+      },
+      keyframes: {
+        blob: {
+          "0%, 100%": { transform: "translate(0px, 0px) scale(1)" },
+          "33%": { transform: "translate(30px, -40px) scale(1.1)" },
+          "66%": { transform: "translate(-20px, 20px) scale(0.95)" },
+        },
+        "pulse-soft": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.6" },
+        },
+      },
+      animation: {
+        blob: "blob 12s infinite ease-in-out",
+        "blob-slow": "blob 18s infinite ease-in-out",
+        "pulse-soft": "pulse-soft 2.5s ease-in-out infinite",
       },
     },
   },

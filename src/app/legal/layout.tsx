@@ -9,9 +9,9 @@ export default function LegalLayout({
     <div className="min-h-screen bg-surface">
       <div className="bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 p-6">
         <Link href="/" className="inline-block hover:opacity-80 transition-opacity">
-          <span className="font-display text-xl font-bold text-white">SARA</span>
+          <span className="font-display text-xl font-bold text-white">Siconic</span>
           <span className="text-blue-300 text-xs font-medium ml-2 hidden sm:inline">
-            sara-app
+            Sistema Contable de Nicaragua
           </span>
         </Link>
       </div>

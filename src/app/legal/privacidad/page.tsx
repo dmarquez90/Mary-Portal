@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Política de Privacidad | SARA",
+  title: "Política de Privacidad | Siconic",
 };
 
 const VERSION = "1.0";
@@ -29,7 +29,7 @@ export default function PrivacidadPage() {
 
       <P>
         <strong>Marquez Project Solutions LLC</strong> (California, Estados Unidos), operadora
-        de SARA / FacturaNIC ("SARA", "el Servicio", "nosotros"), respeta la privacidad de
+        de Siconic / FacturaNIC ("Siconic", "el Servicio", "nosotros"), respeta la privacidad de
         sus Usuarios. Esta Política describe qué datos personales recopilamos, para qué los
         usamos, con quién los compartimos y qué derechos tiene usted sobre ellos, en
         cumplimiento de buenas prácticas internacionales de protección de datos y, en lo
@@ -50,7 +50,7 @@ export default function PrivacidadPage() {
           <strong>Datos de negocio ingresados por el Usuario:</strong> facturas, clientes,
           proveedores, productos e inventario, movimientos de caja y banco, nómina y
           cualquier otra información contable que el Usuario registre voluntariamente en
-          SARA.
+          Siconic.
         </li>
         <li>
           <strong>Datos técnicos:</strong> dirección IP, tipo de navegador, identificadores
@@ -84,7 +84,7 @@ export default function PrivacidadPage() {
         Tratamos sus datos con base en su consentimiento (otorgado al crear la cuenta y
         aceptar esta Política), la ejecución del contrato de servicio descrito en los
         Términos y Condiciones, y el interés legítimo de la Empresa en mantener la seguridad
-        y el correcto funcionamiento de SARA.
+        y el correcto funcionamiento de Siconic.
       </P>
 
       <H2>4. Con Quién Compartimos los Datos</H2>
@@ -114,7 +114,7 @@ export default function PrivacidadPage() {
       <P>
         Sus datos son almacenados y procesados en servidores de nuestros proveedores de
         infraestructura, que pueden estar ubicados fuera de Nicaragua, incluyendo Estados
-        Unidos u otros países. Al usar SARA, usted consiente esta transferencia
+        Unidos u otros países. Al usar Siconic, usted consiente esta transferencia
         internacional, la cual se realiza bajo los estándares de seguridad contractual de
         dichos proveedores.
       </P>
@@ -151,7 +151,7 @@ export default function PrivacidadPage() {
 
       <H2>9. Datos de Terceros Ingresados por el Usuario</H2>
       <P>
-        Cuando el Usuario registra en SARA información de sus propios clientes,
+        Cuando el Usuario registra en Siconic información de sus propios clientes,
         proveedores, empleados o representantes, el Usuario es el responsable de ese
         tratamiento frente a esos terceros y debe garantizar que cuenta con la base legal
         necesaria para ello. La Empresa actúa solo como encargado del tratamiento
@@ -168,7 +168,7 @@ export default function PrivacidadPage() {
 
       <H2>11. Menores de Edad</H2>
       <P>
-        SARA está dirigido a personas mayores de edad que actúan en representación de un
+        Siconic está dirigido a personas mayores de edad que actúan en representación de un
         negocio o actividad económica. No recopilamos intencionalmente datos de menores de
         edad.
       </P>

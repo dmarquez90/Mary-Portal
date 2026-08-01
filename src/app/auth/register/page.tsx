@@ -204,7 +204,7 @@ export default function RegisterPage() {
             Crear cuenta
           </h1>
           <p className="text-slate-500 text-sm">
-            Completa tus datos para registrarte en SARA
+            Completa tus datos para registrarte en Siconic
           </p>
         </div>
 
@@ -478,7 +478,7 @@ export default function RegisterPage() {
               <Link href="/legal/privacidad" target="_blank" className="text-brand-700 font-semibold hover:underline">
                 Política de Privacidad
               </Link>{" "}
-              de SARA. <span className="text-red-500">*</span>
+              de Siconic. <span className="text-red-500">*</span>
             </span>
           </label>
 

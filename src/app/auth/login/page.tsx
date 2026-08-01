@@ -44,7 +44,7 @@ export default function LoginPage() {
             Iniciar sesión
           </h1>
           <p className="text-slate-500 text-sm">
-            Ingresa a tu cuenta de SARA
+            Ingresa a tu cuenta de Siconic
           </p>
         </div>
 

@@ -3,7 +3,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "sara-app",
+  title: "Siconic",
   description:
     "Sistema contable y de facturación para empresas nicaragüenses. Cumple con estándares de la DGI.",
 };

@@ -195,8 +195,8 @@ export default function Sidebar() {
       >
         {/* Logo */}
         <div className="px-6 py-6 border-b border-white/10">
-          <span className="font-display text-xl font-bold">SARA</span>
-          <p className="text-blue-300 text-xs mt-1">Sistema Administrativo</p>
+          <span className="font-display text-xl font-bold">Siconic</span>
+          <p className="text-blue-300 text-xs mt-1">Sistema Contable de Nicaragua</p>
         </div>
 
         {/* Navigation */}

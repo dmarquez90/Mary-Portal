@@ -192,7 +192,7 @@ export default function CompraDetallePage() {
 </div>
 ${compra.notas ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0"><div class="lbl">Notas</div><p style="font-size:12px;color:#475569">${compra.notas}</p></div>` : ""}
 <div class="pie">
-  Documento generado por sara-app<br/>
+  Documento generado por Siconic<br/>
   Nicaragua · RUC: ${empresa.ruc} · ${empresa.correo}
 </div>
 <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</script>
@@ -426,7 +426,7 @@ ${compra.notas ? `<div class="bloque"><div class="lbl">NOTA:</div><div>${compra.
         )}
 
         <div className="border-t border-slate-100 mt-6 pt-4 text-center text-xs text-slate-400">
-          <p>Documento generado por sara-app</p>
+          <p>Documento generado por Siconic</p>
           <p className="mt-0.5">Nicaragua · RUC: {empresa?.ruc} · {empresa?.correo}</p>
         </div>
       </div>
