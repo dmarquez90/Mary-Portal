@@ -122,7 +122,7 @@ function imprimirEstadoCuenta(empresa: Empresa, cliente: Cliente, saldos: Saldo[
     <tbody>${filasAbonos}</tbody>
     <tfoot><tr><td colspan="4">TOTAL COBRADO</td><td>${fmt(abonos.reduce((a,b)=>a+b.monto,0))}</td></tr></tfoot>
   </table>` : ''}
-  <div class="pie">SARA â€” Sistema Automatizado de Registro Administrativo Â· Reporte generado el ${fmtFecha(fechaReporte)}</div>
+  <div class="pie">Siconic â€” Sistema Automatizado de Registro Administrativo Â· Reporte generado el ${fmtFecha(fechaReporte)}</div>
   <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}</script>
   </body></html>`
 
@@ -196,7 +196,7 @@ function imprimirAging(empresa: Empresa, filas: FilaAging[], fechaReporte: strin
     <tbody>${filasTbl}</tbody>
     <tfoot><tr><td>TOTALES</td><td></td><td>${fmt(tot0)}</td><td>${fmt(tot31)}</td><td>${fmt(tot61)}</td><td>${fmt(tot90)}</td><td>${fmt(totT)}</td></tr></tfoot>
   </table>
-  <div class="pie">SARA â€” Sistema Administrativo Â· Reporte generado el ${fmtFecha(fechaReporte)}</div>
+  <div class="pie">Siconic â€” Sistema Administrativo Â· Reporte generado el ${fmtFecha(fechaReporte)}</div>
   <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}</script>
   </body></html>`
 

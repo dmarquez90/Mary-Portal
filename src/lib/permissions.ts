@@ -1,4 +1,4 @@
-// Matriz de permisos de SARA (mismo patrón que usePermissions.js de Mary,
+// Matriz de permisos de Siconic (mismo patrón que usePermissions.js de Mary,
 // adaptado a rol-por-empresa en vez de rol global). Esta matriz es el espejo
 // exacto de matriz_permisos_seed en Postgres (migración rbac_02) — si se
 // cambia un valor aquí, debe cambiarse también ahí.

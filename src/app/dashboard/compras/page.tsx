@@ -4,8 +4,9 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Link from "next/link";
-import { Plus, ShoppingCart, Trash2, Eye, Search, X, Calendar, DollarSign } from "lucide-react";
+import { Plus, ShoppingCart, Trash2, Eye, Search, X, Calendar, DollarSign, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import EditarDatosProveedorModal from "@/components/compras/EditarDatosProveedorModal";
 
 const BADGE: Record<string, string> = {
   recibida: "badge-info", pagada: "badge-success", borrador: "badge-gray", anulada: "badge-danger",
@@ -13,7 +14,7 @@ const BADGE: Record<string, string> = {
 
 interface Compra {
   id: string; numero_compra: string; numero_factura_proveedor?: string | null; fecha_compra: string;
-  iva_total: number; total: number; estado: string;
+  iva_total: number; total: number; estado: string; proveedor_id?: string | null;
   proveedor: { nombre: string } | null;
 }
 
@@ -28,6 +29,7 @@ export default function ComprasPage() {
   const [confirmDel, setConfirmDel] = useState<Compra | null>(null);
   const [empresaId,  setEmpresaId]  = useState("");
   const [tasaHoy,    setTasaHoy]    = useState<TasaCambio | null>(null);
+  const [editandoProv, setEditandoProv] = useState<Compra | null>(null);
 
   // ── Filtros ──────────────────────────────────────────────────
   const [filtroNumero,    setFiltroNumero]    = useState("");
@@ -50,7 +52,7 @@ export default function ComprasPage() {
     const [{ data: comps }, { data: tasas }] = await Promise.all([
       supabase
         .from("compras")
-        .select("id, numero_compra, numero_factura_proveedor, fecha_compra, iva_total, total, estado, proveedor:proveedores(nombre)")
+        .select("id, numero_compra, numero_factura_proveedor, fecha_compra, iva_total, total, estado, proveedor_id, proveedor:proveedores(nombre)")
         .in("empresa_id", ids.length ? ids : ["none"])
         .order("created_at", { ascending: false })
         .limit(500),
@@ -284,11 +286,19 @@ export default function ComprasPage() {
                           className="text-purple-700 hover:text-purple-900 flex items-center gap-1 text-sm font-medium">
                           <Eye className="w-4 h-4" /> Ver
                         </Link>
-                        {c.estado === "borrador" && (
+                        {c.estado === "borrador" ? (
                           <Link href={`/dashboard/compras/${c.id}/editar`}
                             className="text-amber-600 hover:text-amber-800 flex items-center gap-1 text-sm font-medium">
                             ✏️ Editar
                           </Link>
+                        ) : c.estado !== "anulada" && (
+                          <button
+                            onClick={() => setEditandoProv(c)}
+                            className="text-amber-600 hover:text-amber-800 flex items-center gap-1 text-sm font-medium"
+                            title="Corregir proveedor o N° de factura sin afectar montos ni contabilidad"
+                          >
+                            <Pencil className="w-3.5 h-3.5" /> Proveedor/Factura
+                          </button>
                         )}
                         {c.estado !== "anulada" && (
                           <button
@@ -331,6 +341,25 @@ export default function ComprasPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Editar proveedor / N° factura sin tocar montos ni contabilidad */}
+      {editandoProv && (
+        <EditarDatosProveedorModal
+          compraId={editandoProv.id}
+          empresaId={empresaId}
+          proveedorIdInicial={editandoProv.proveedor_id ?? null}
+          proveedorNombreInicial={editandoProv.proveedor?.nombre ?? null}
+          numeroFacturaInicial={editandoProv.numero_factura_proveedor ?? null}
+          onClose={() => setEditandoProv(null)}
+          onSaved={(datos) => {
+            setCompras(prev => prev.map(c => c.id === editandoProv.id
+              ? { ...c, proveedor_id: datos.proveedor_id, proveedor: datos.proveedor_nombre ? { nombre: datos.proveedor_nombre } : null, numero_factura_proveedor: datos.numero_factura_proveedor }
+              : c
+            ));
+            setEditandoProv(null);
+          }}
+        />
       )}
     </div>
   );

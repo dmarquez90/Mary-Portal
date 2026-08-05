@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import Sidebar from "@/components/layout/Sidebar";
+import TopBar from "@/components/layout/TopBar";
+import PageTransition from "@/components/layout/PageTransition";
 
 // Super Admin no posee ninguna empresa (empresas_persona_natural/juridicas)
 // -- es un rol de plataforma aparte. Cualquier ruta bajo /dashboard asume que
@@ -20,10 +21,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="flex min-h-screen bg-surface">
-      <Sidebar />
-      <main className="flex-1 lg:ml-64 p-6 lg:p-8">
-        {children}
+    <div className="min-h-screen bg-surface">
+      <TopBar />
+      <main className="p-6 lg:p-8">
+        <PageTransition>{children}</PageTransition>
       </main>
     </div>
   );

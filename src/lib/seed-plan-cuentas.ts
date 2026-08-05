@@ -1,5 +1,5 @@
 // ============================================================
-// SARA – Plan de Cuentas Predeterminado
+// Siconic – Plan de Cuentas Predeterminado
 // Basado en NIIF para PYMES adaptado a Nicaragua (Ley 822)
 // Se llama al crear una nueva empresa o desde Configuración
 // ============================================================

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { usePermissionsSARA } from "@/hooks/usePermissionsSARA";
+import { usePermissionsSiconic } from "@/hooks/usePermissionsSiconic";
 import { toast } from "sonner";
 import {
   ChevronDown,
@@ -39,7 +39,7 @@ export default function VETPage() {
   const empresaIdUrl = searchParams.get("empresa_id") ?? undefined;
 
   const { loading: permisosLoading, isSuperAdmin, empresaId: empresaSesionId } =
-    usePermissionsSARA(empresaIdUrl);
+    usePermissionsSiconic(empresaIdUrl);
 
   const [userId, setUserId] = useState<string | null>(null);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);

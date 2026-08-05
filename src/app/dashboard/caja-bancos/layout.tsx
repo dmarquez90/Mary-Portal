@@ -1,10 +1,10 @@
 "use client";
 
 import { AlertCircle, Loader2 } from "lucide-react";
-import { usePermissionsSARA } from "@/hooks/usePermissionsSARA";
+import { usePermissionsSiconic } from "@/hooks/usePermissionsSiconic";
 
 export default function CajaBancosLayout({ children }: { children: React.ReactNode }) {
-  const { loading, canView } = usePermissionsSARA();
+  const { loading, canView } = usePermissionsSiconic();
 
   if (loading) {
     return (

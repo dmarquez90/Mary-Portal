@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(data, { status: 201 })
 }
 
-// PATCH: conciliar una línea con una transacción SARA
+// PATCH: conciliar una línea con una transacción Siconic
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

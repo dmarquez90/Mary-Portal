@@ -1,6 +1,6 @@
 'use client'
 // src/app/dashboard/estados-financieros/estado-resultados/page.tsx
-// SARA - Estado de Resultados (Pérdidas y Ganancias)
+// Siconic - Estado de Resultados (Pérdidas y Ganancias)
 // NIIF PYMES Sección 5 | LCT Art. 43-54
 
 import { useState, useEffect, useCallback } from 'react'
@@ -148,7 +148,7 @@ function EstadoResultadosPageContent() {
             `).join('')}
           </tbody>
         </table>
-        <p class="norma">NIIF PYMES Sección 5 · LCT Art. 43-54 · Formulario DGI 106 · Generado por SARA</p>
+        <p class="norma">NIIF PYMES Sección 5 · LCT Art. 43-54 · Formulario DGI 106 · Generado por Siconic</p>
       </body>
       </html>
     `)
@@ -323,7 +323,7 @@ function EstadoResultadosPageContent() {
           {/* Pie */}
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
             <p className="text-xs text-gray-400">
-              {datos.metadatos.norma} · {datos.metadatos.referencia_fiscal} · Generado por SARA el {new Date().toLocaleDateString('es-NI')}
+              {datos.metadatos.norma} · {datos.metadatos.referencia_fiscal} · Generado por Siconic el {new Date().toLocaleDateString('es-NI')}
             </p>
           </div>
         </div>

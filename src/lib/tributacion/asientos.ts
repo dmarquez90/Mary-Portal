@@ -1,5 +1,5 @@
 // ============================================================
-// SARA ERP — Asientos Automáticos de Tributación
+// Siconic ERP — Asientos Automáticos de Tributación
 // Genera partida doble al pagar cada obligación fiscal
 // LCT Art. 52, 63-64, 87 · Plan Arbitrios Municipal
 // ============================================================

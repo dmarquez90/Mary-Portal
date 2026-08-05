@@ -113,7 +113,7 @@ function imprimirEstadoCuentaProveedor(empresa: Empresa, proveedor: Proveedor, s
     <tbody>${filasAbonos}</tbody>
     <tfoot><tr><td colspan="4">TOTAL PAGADO</td><td>${fmt(abonos.reduce((a,b)=>a+b.monto,0))}</td></tr></tfoot>
   </table>` : ''}
-  <div class="pie">SARA — Sistema Automatizado de Registro Administrativo · ${fmtFecha(fechaReporte)}</div>
+  <div class="pie">Siconic — Sistema Automatizado de Registro Administrativo · ${fmtFecha(fechaReporte)}</div>
   <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}</script>
   </body></html>`
 
@@ -167,7 +167,7 @@ function imprimirAgingCxP(empresa: Empresa, filas: FilaAging[], fechaReporte: st
     <tbody>${filasTbl}</tbody>
     <tfoot><tr><td>TOTALES</td><td></td><td>${fmt(tot0)}</td><td>${fmt(tot31)}</td><td>${fmt(tot61)}</td><td>${fmt(tot90)}</td><td>${fmt(totT)}</td></tr></tfoot>
   </table>
-  <div class="pie">SARA — Sistema Administrativo · ${fmtFecha(fechaReporte)}</div>
+  <div class="pie">Siconic — Sistema Administrativo · ${fmtFecha(fechaReporte)}</div>
   <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}</script>
   </body></html>`
 

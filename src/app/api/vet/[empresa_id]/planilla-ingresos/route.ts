@@ -1,4 +1,6 @@
 import { createHash } from 'crypto'
+import { readFile } from 'fs/promises'
+import path from 'path'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -68,35 +70,66 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ emp
     cantidad_facturas: detalleFacturas.length,
   }
 
-  const XLSX = await import('xlsx-js-style')
-  const wb = XLSX.utils.book_new()
-
   const empresaNombre = (empresa as { nombre_empresa?: string; nombre_completo?: string }).nombre_empresa ??
     (empresa as { nombre_completo?: string }).nombre_completo ?? ''
 
-  const wsResumen = XLSX.utils.aoa_to_sheet([
-    ['Planilla de Ingresos - Reporte VET'],
-    ['Empresa', empresaNombre],
-    ['Período', `${periodo_desde} a ${periodo_hasta}`],
-    [],
-    ['Concepto', 'Monto (C$)'],
-    ['Ventas gravadas', resumenFinanciero.ventas_gravadas],
-    ['Ventas exentas', resumenFinanciero.ventas_exentas],
-    ['Servicios', resumenFinanciero.servicios],
-    ['Total planilla', resumenFinanciero.total_planilla],
-    [],
-    ['Validación', resumenValidacion.es_valido ? 'Sin errores' : 'Con errores'],
-    ['Errores', resumenValidacion.errores],
-    ['Advertencias', resumenValidacion.advertencias],
-  ])
-  XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen')
+  // Se parte de la plantilla OFICIAL de la DGI (la misma que usa
+  // /dashboard/reportes) y solo se llenan las celdas de valores: los
+  // textos, hojas y estructura quedan idénticos a lo que la VET espera.
+  const XLSX = await import('xlsx-js-style')
+  const rutaPlantilla = path.join(process.cwd(), 'public', 'plantillas-vet', 'dgi-planilla-ingresos-dmi-v2.xlsx')
+  const bufferPlantilla = await readFile(rutaPlantilla)
+  const wb = XLSX.read(bufferPlantilla, { type: 'buffer', cellStyles: true })
+  const ws1 = wb.Sheets['Con 25 filas y Datos de Factura']
+  if (!ws1) return NextResponse.json({ error: 'La plantilla oficial no tiene la hoja esperada' }, { status: 500 })
 
-  const headerDetalle = ['N° Factura', 'Fecha', 'Cliente', 'RUC/Cédula', 'Subtotal', 'IVA', 'Total']
-  const filasDetalle = detalleFacturas.map((f) => [
-    f.numero_factura, f.fecha_emision, f.cliente_nombre, f.cliente_ruc, f.subtotal, f.iva_total, f.total,
-  ])
-  const wsDetalle = XLSX.utils.aoa_to_sheet([headerDetalle, ...filasDetalle])
-  XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle de Facturas')
+  const brutosSinIVA = resumenFinanciero.total_planilla
+
+  // Valores de la columna B (filas 2-25 de la plantilla oficial)
+  const valores: Record<string, number> = {
+    B2: ventasGravadas,   // Base Imponible para determinar el IVA
+    B3: ventasGravadas,   // Ingresos gravados del mes (tasa 15%)
+    B4: 0,                // Energía eléctrica subsidiada (tasa 7%)
+    B5: 0,                // Exportación de bienes tangibles
+    B6: 0,                // Exportación de bienes intangibles
+    B7: ventasExentas,    // Ingresos del mes exentos
+    B8: 0,                // Ingresos del mes exonerados
+    B9: 0,                // Base Imponible para determinar ISC
+    B10: 0, B11: 0, B12: 0, B13: 0, B14: 0, B15: 0, B16: 0, B17: 0, B18: 0,
+    B19: brutosSinIVA,    // Base Imponible para determinar PMD o Anticipo
+    B20: brutosSinIVA,    // Ingresos brutos del mes
+    B21: 0,               // Margen de comercialización
+    B22: 0,               // Utilidades del mes
+    B23: 0,               // Base impuesto Casino
+    B24: 0,               // Total máquinas de juegos
+    B25: 0,               // Cantidad de mesas de juego
+  }
+  for (const [celda, valor] of Object.entries(valores)) {
+    XLSX.utils.sheet_add_aoa(ws1, [[valor]], { origin: celda })
+  }
+
+  // Rango de facturas por serie (desde la fila 27, bajo el encabezado
+  // "Sucursales" de la fila 26): agrupa por prefijo de serie y toma
+  // min/max numérico, no lexicográfico.
+  if (detalleFacturas.length > 0) {
+    const porSerie = new Map<string, { min: string; max: string; minN: number; maxN: number }>()
+    for (const f of detalleFacturas) {
+      const num = f.numero_factura ?? ''
+      const serie = num.includes('-') ? num.split('-')[0] : ''
+      const n = parseInt(num.replace(/\D/g, ''), 10) || 0
+      const actual = porSerie.get(serie)
+      if (!actual) porSerie.set(serie, { min: num, max: num, minN: n, maxN: n })
+      else {
+        if (n < actual.minN) { actual.min = num; actual.minN = n }
+        if (n > actual.maxN) { actual.max = num; actual.maxN = n }
+      }
+    }
+    let fila = 27
+    for (const [serie, r] of porSerie) {
+      XLSX.utils.sheet_add_aoa(ws1, [[empresaNombre, r.min, r.max, serie]], { origin: `A${fila}` })
+      fila++
+    }
+  }
 
   const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
   const hashArchivo = createHash('sha256').update(buffer).digest('hex')

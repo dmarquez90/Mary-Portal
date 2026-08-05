@@ -1,6 +1,6 @@
 'use client'
 // src/app/dashboard/estados-financieros/balance-general/page.tsx
-// SARA - Balance General (Estado de Situación Financiera)
+// Siconic - Balance General (Estado de Situación Financiera)
 // NIIF PYMES Sección 4 | LCT Nicaragua
 
 import { useState, useEffect, useCallback } from 'react'
@@ -171,7 +171,7 @@ function BalanceGeneralPageContent() {
         <table><tbody>${datos.patrimonio.map(filaHtml).join('')}</tbody></table>
       </div>
       <p class="cuadre">${datos.cuadrado ? '✓ Balance cuadrado correctamente' : '⚠ ' + datos.alerta_cuadre}</p>
-      <p style="font-size:9px;color:#999;text-align:center;margin-top:12px">NIIF PYMES Sección 4 · LCT Art. 103-110 · Generado por SARA</p>
+      <p style="font-size:9px;color:#999;text-align:center;margin-top:12px">NIIF PYMES Sección 4 · LCT Art. 103-110 · Generado por Siconic</p>
       </body></html>`)
     w.document.close()
     w.print()

@@ -1,6 +1,6 @@
 'use client'
 // src/app/dashboard/estados-financieros/cambios-patrimonio/page.tsx
-// SARA - Estado de Cambios en el Patrimonio
+// Siconic - Estado de Cambios en el Patrimonio
 // NIIF PYMES Sección 6 | Código de Comercio Nicaragua
 
 import { useState, useEffect, useCallback } from 'react'
@@ -168,7 +168,7 @@ function CambiosPatrimonioPageContent() {
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
             <p className="text-xs text-gray-400">
               NIIF PYMES Sección 6 · Reserva Legal: 25% conforme Código de Comercio Nicaragua ·
-              Generado por SARA el {new Date().toLocaleDateString('es-NI')}
+              Generado por Siconic el {new Date().toLocaleDateString('es-NI')}
             </p>
           </div>
         </div>

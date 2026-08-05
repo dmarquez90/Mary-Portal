@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { Users, FileText, Gift, BarChart2 } from 'lucide-react'
+import { Users, FileText, Gift, BarChart2, CalendarDays } from 'lucide-react'
 
 const modulos = [
   {
@@ -26,6 +26,14 @@ const modulos = [
     descripcion: 'Vacaciones · Aguinaldo · Indemnización · Liquidaciones',
     color:       'bg-amber-50 border-amber-200 text-amber-700',
     iconColor:   'text-amber-600',
+  },
+  {
+    href:        '/dashboard/nomina/ausencias',
+    icon:        CalendarDays,
+    titulo:      'Vacaciones y Enfermedad',
+    descripcion: 'Días descansados, pagados sin descanso e incapacidades',
+    color:       'bg-cyan-50 border-cyan-200 text-cyan-700',
+    iconColor:   'text-cyan-600',
   },
   {
     href:        '/dashboard/nomina/reportes',

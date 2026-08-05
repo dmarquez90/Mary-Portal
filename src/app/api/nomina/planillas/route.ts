@@ -67,6 +67,21 @@ export async function POST(req: NextRequest) {
 
   const tasaInssPatronal = await getTasaInssPatronal(supabase, empresa_id)
 
+  // Antigüedad (fecha_ingreso) y provisión de indemnización ya acumulada:
+  // necesarias para aplicar la tasa progresiva del Art. 45 CT y su tope de
+  // 5 meses (ver tasaProvisionIndemnizacion en calculos.ts). Se consultan
+  // aquí, no se confía en lo que mande el frontend.
+  const empleadoIds = detalles.map((d: any) => d.empleado_id)
+  const [{ data: empleadosData }, { data: prestacionesData }] = await Promise.all([
+    supabase.from('empleados').select('id, fecha_ingreso').in('id', empleadoIds),
+    supabase.from('prestaciones_sociales').select('empleado_id, acum_indemnizacion')
+      .eq('empresa_id', empresa_id).in('empleado_id', empleadoIds),
+  ])
+  const fechaIngresoPorEmpleado = new Map((empleadosData ?? []).map((e: any) => [e.id, e.fecha_ingreso]))
+  const acumIndemnizacionPorEmpleado = new Map(
+    (prestacionesData ?? []).map((p: any) => [p.empleado_id, Number(p.acum_indemnizacion) ?? 0])
+  )
+
   const detallesCalculados = detalles.map((d: any) => {
     const resultado = calcularEmpleadoPlanilla({
       tasaInssPatronal,
@@ -85,6 +100,9 @@ export async function POST(req: NextRequest) {
       acumBrutoAnteriores: d.acum_bruto_anteriores ?? 0,
       acumINSSAnteriores:  d.acum_inss_anteriores ?? 0,
       acumIRAnteriores:    d.acum_ir_anteriores ?? 0,
+      anioActual:          periodo_anio,
+      fechaIngreso:        fechaIngresoPorEmpleado.get(d.empleado_id) ?? undefined,
+      acumIndemnizacionAnterior: acumIndemnizacionPorEmpleado.get(d.empleado_id) ?? 0,
     })
 
     totales.total_salarios_brutos    += resultado.salarioBruto

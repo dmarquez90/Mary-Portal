@@ -1,5 +1,5 @@
 // ============================================================
-// SARA App – Types: Pagos, Caja y Bancos
+// Siconic App – Types: Pagos, Caja y Bancos
 // src/types/pagos.ts
 // ============================================================
 

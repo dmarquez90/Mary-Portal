@@ -65,7 +65,7 @@ export default function CxCPage() {
   })
   const [abono, setAbono] = useState<AbonoForm>(abonoVacio())
 
-  // ── Obtener empresa_id correctamente (igual que el resto de SARA) ──
+  // ── Obtener empresa_id correctamente (igual que el resto de Siconic) ──
   useEffect(() => {
     async function init() {
       const { createClient } = await import('@/lib/supabase/client')

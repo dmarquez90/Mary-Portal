@@ -176,7 +176,7 @@ export default function SuperAdminPage() {
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-900">Panel Super Admin</h1>
-          <p className="text-slate-500 text-sm mt-1">Empresas registradas en SARA</p>
+          <p className="text-slate-500 text-sm mt-1">Empresas registradas en Siconic</p>
         </div>
         <button onClick={handleLogout} className="text-slate-500 hover:text-red-600 flex items-center gap-1.5 text-sm shrink-0">
           <LogOut size={16} /> Cerrar sesión

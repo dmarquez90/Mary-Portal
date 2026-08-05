@@ -198,6 +198,16 @@ export default function PosPage() {
       toast.error("Selecciona un cliente con crédito habilitado para vender a crédito");
       return;
     }
+    if (tipoPago === "contado") {
+      if (!montoRecibido || Number(montoRecibido) <= 0) {
+        toast.error("Ingresa con cuánto paga el cliente antes de cobrar");
+        return;
+      }
+      if (Number(montoRecibido) < total) {
+        toast.error("El monto recibido es menor al total de la venta");
+        return;
+      }
+    }
     setCobrando(true);
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
@@ -434,14 +444,49 @@ export default function PosPage() {
               </select>
 
               {tipoPago === "contado" && (
-                <input type="number" min="0" step="0.01" className="input text-sm font-mono" placeholder="Monto recibido"
-                  value={montoRecibido} onChange={e => setMontoRecibido(e.target.value)} />
+                <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-2 space-y-1.5">
+                  <label className="block text-xs font-semibold text-blue-800">
+                    ¿Con cuánto paga el cliente?
+                  </label>
+                  <input
+                    type="number" min="0" step="0.01"
+                    className="input text-sm font-mono w-full bg-white"
+                    placeholder={`Monto recibido (ej. ${total.toFixed(2)})`}
+                    value={montoRecibido}
+                    onChange={e => setMontoRecibido(e.target.value)}
+                  />
+                  <div className="flex flex-wrap gap-1">
+                    <button type="button" onClick={() => setMontoRecibido(total.toFixed(2))}
+                      className="text-xs px-2 py-1 rounded bg-white border border-blue-300 text-blue-700 hover:bg-blue-100">
+                      Exacto ({formatCurrency(total)})
+                    </button>
+                    {[...new Set([50, 100, 200, 500, 1000].filter(v => v >= total))].slice(0, 3).map(v => (
+                      <button key={v} type="button" onClick={() => setMontoRecibido(String(v))}
+                        className="text-xs px-2 py-1 rounded bg-white border border-blue-300 text-blue-700 hover:bg-blue-100">
+                        C${v}
+                      </button>
+                    ))}
+                  </div>
+                  {!montoRecibido && (
+                    <p className="text-[11px] text-blue-700">
+                      Obligatorio: ingresa con cuánto paga el cliente para poder cobrar.
+                    </p>
+                  )}
+                  {montoRecibido !== "" && Number(montoRecibido) < total && (
+                    <p className="text-[11px] text-red-600 font-medium">
+                      El monto recibido es menor al total (faltan {formatCurrency(total - Number(montoRecibido))}).
+                    </p>
+                  )}
+                </div>
               )}
 
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between text-slate-500"><span>Subtotal</span><span>{formatCurrency(subtotal)}</span></div>
                 <div className="flex justify-between text-slate-500"><span>IVA 15%</span><span>{formatCurrency(ivaTotal)}</span></div>
                 <div className="flex justify-between font-bold text-lg text-slate-900 pt-1 border-t border-slate-100"><span>Total</span><span>{formatCurrency(total)}</span></div>
+                {tipoPago === "contado" && montoRecibido !== "" && (
+                  <div className="flex justify-between text-slate-500"><span>Recibido</span><span>{formatCurrency(Number(montoRecibido))}</span></div>
+                )}
                 {cambio != null && (
                   <div className="flex justify-between text-green-700 font-semibold"><span>Cambio</span><span>{formatCurrency(cambio)}</span></div>
                 )}
@@ -449,8 +494,11 @@ export default function PosPage() {
 
               <button
                 onClick={cobrar}
-                disabled={cobrando || carrito.length === 0}
-                className="btn-primary w-full flex items-center justify-center gap-2"
+                disabled={
+                  cobrando || carrito.length === 0 ||
+                  (tipoPago === "contado" && (!montoRecibido || Number(montoRecibido) < total))
+                }
+                className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {cobrando ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 Cobrar
@@ -470,10 +518,18 @@ export default function PosPage() {
             <h2 className="font-display text-lg font-bold text-slate-900">Venta registrada</h2>
             <p className="text-slate-500 text-sm mt-1">{ultimaVenta.numeroFactura}</p>
             <p className="font-mono font-bold text-2xl text-slate-900 mt-2">{formatCurrency(ultimaVenta.total)}</p>
+            {ultimaVenta.montoRecibido != null && (
+              <p className="text-slate-500 text-sm mt-1">
+                Recibido: {formatCurrency(ultimaVenta.montoRecibido)}
+              </p>
+            )}
             {ultimaVenta.cambio != null && ultimaVenta.cambio > 0 && (
               <p className="text-green-700 font-semibold text-sm mt-1">
                 Cambio a entregar: {formatCurrency(ultimaVenta.cambio)}
               </p>
+            )}
+            {ultimaVenta.cambio === 0 && ultimaVenta.montoRecibido != null && (
+              <p className="text-slate-500 text-sm mt-1">Sin cambio (pago exacto)</p>
             )}
             <div className="flex gap-2 mt-5">
               <button

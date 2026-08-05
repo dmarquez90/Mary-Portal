@@ -2,88 +2,71 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
-import {
-  FileText, ShoppingCart, Package, TrendingUp, AlertTriangle, ArrowRight,
-} from "lucide-react";
 import Link from "next/link";
-import { formatCurrency } from "@/lib/utils";
+import { motion, type Variants } from "framer-motion";
+import {
+  FileText, ShoppingCart, Package, Users, Truck, DollarSign, BarChart3,
+  Store, Landmark, Calculator, ClipboardList, BookText, BookOpen, TrendingUp,
+  FileBarChart2, UserCheck, CalendarDays, Gift, Building2, CreditCard,
+  ShoppingBag, GitMerge, Lock, FileX, Banknote, ShieldCheck, UserCog, Settings,
+} from "lucide-react";
+import { usePermissionsSiconic } from "@/hooks/usePermissionsSiconic";
 
-interface Stats {
-  totalVentasMes: number;
-  totalComprasMes: number;
-  totalFacturas: number;
-  productosStockBajo: number;
-  nombreEmpresa: string;
-  tieneEmpresa: boolean;
-  mes: string;
+interface ModuloBoton {
+  href: string;
+  icon: React.ElementType;
+  label: string;
 }
 
+interface Grupo {
+  titulo: string;
+  color: "blue" | "purple" | "green" | "amber" | "indigo" | "slate";
+  modulos: ModuloBoton[];
+}
+
+const CARD_CLASSES: Record<Grupo["color"], string> = {
+  blue:   "from-blue-600 to-blue-900 shadow-blue-900/30 hover:shadow-blue-500/40",
+  purple: "from-purple-600 to-purple-900 shadow-purple-900/30 hover:shadow-purple-500/40",
+  green:  "from-emerald-600 to-emerald-900 shadow-emerald-900/30 hover:shadow-emerald-500/40",
+  amber:  "from-amber-500 to-amber-800 shadow-amber-900/30 hover:shadow-amber-500/40",
+  indigo: "from-indigo-600 to-indigo-900 shadow-indigo-900/30 hover:shadow-indigo-500/40",
+  slate:  "from-slate-600 to-slate-900 shadow-slate-900/30 hover:shadow-slate-500/40",
+};
+
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 16 },
+  show: (i: number = 0) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.4, delay: i * 0.04, ease: [0.16, 1, 0.3, 1] },
+  }),
+};
+
 export default function DashboardPage() {
-  const [stats, setStats]       = useState<Stats | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string>("");
+  const [nombreEmpresa, setNombreEmpresa] = useState<string>("");
+  const { loading, can } = usePermissionsSiconic();
 
   useEffect(() => {
     async function load() {
       const { createClient } = await import("@/lib/supabase/client");
       const { getEmpresaIdActual } = await import("@/lib/supabase/empresa-actual");
       const supabase = createClient();
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-      if (!user) {
-        setDebugInfo(`Sin sesión activa. Error: ${userError?.message}`);
-        return;
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
       const empresaId = await getEmpresaIdActual(supabase, user.id);
+      if (!empresaId) return;
 
-      // Buscar empresa - capturar errores explícitamente
-      const [resNatural, resJuridica] = empresaId ? await Promise.all([
-        supabase.from("empresas_persona_natural").select("id, nombre_completo").eq("id", empresaId).maybeSingle(),
-        supabase.from("empresas_juridicas").select("id, nombre_empresa").eq("id", empresaId).maybeSingle(),
-      ]) : [{ data: null, error: null }, { data: null, error: null }];
-
-      const en = resNatural.data;
-      const ej = resJuridica.data;
-      const errNat = resNatural.error;
-      const errJur = resJuridica.error;
-
-      // Debug info visible solo si no encuentra empresa
-      if (!en && !ej) {
-        setDebugInfo(
-          `usuario: ${user.id} | empresa_id: ${empresaId ?? "sin asignar"} | ` +
-          `Error natural: ${errNat?.code} - ${errNat?.message} | ` +
-          `Error jurídica: ${errJur?.code} - ${errJur?.message}`
-        );
-      }
-
-      const empresa = en ?? ej;
-      const nombreEmpresa = en?.nombre_completo ?? ej?.nombre_empresa ?? "Tu empresa";
-      const ids = [en?.id, ej?.id].filter(Boolean) as string[];
-
-      const now = new Date();
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-      const mes = now.toLocaleDateString("es-NI", { month: "long", year: "numeric" });
-
-      let totalVentasMes = 0, totalComprasMes = 0, totalFacturas = 0, productosStockBajo = 0;
-
-      if (ids.length) {
-        const [{ data: fac }, { data: com }, { data: prod }] = await Promise.all([
-          supabase.from("facturas").select("total").in("empresa_id", ids).gte("fecha_emision", firstDay).neq("estado", "anulada"),
-          supabase.from("compras").select("total").in("empresa_id", ids).gte("fecha_compra", firstDay).neq("estado", "anulada"),
-          supabase.from("productos").select("stock_actual, stock_minimo").in("empresa_id", ids).eq("activo", true),
-        ]);
-        totalVentasMes     = fac?.reduce((s, f) => s + Number(f.total), 0) ?? 0;
-        totalFacturas      = fac?.length ?? 0;
-        totalComprasMes    = com?.reduce((s, c) => s + Number(c.total), 0) ?? 0;
-        productosStockBajo = prod?.filter(p => Number(p.stock_actual) <= Number(p.stock_minimo)).length ?? 0;
-      }
-
-      setStats({ totalVentasMes, totalComprasMes, totalFacturas, productosStockBajo, nombreEmpresa, tieneEmpresa: !!empresa, mes });
+      const [{ data: en }, { data: ej }] = await Promise.all([
+        supabase.from("empresas_persona_natural").select("nombre_completo").eq("id", empresaId).maybeSingle(),
+        supabase.from("empresas_juridicas").select("nombre_empresa").eq("id", empresaId).maybeSingle(),
+      ]);
+      setNombreEmpresa(en?.nombre_completo ?? ej?.nombre_empresa ?? "Tu empresa");
     }
     load();
   }, []);
 
-  if (!stats) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-4 border-brand-200 border-t-brand-700 rounded-full animate-spin" />
@@ -91,94 +74,168 @@ export default function DashboardPage() {
     );
   }
 
+  const grupos: Grupo[] = [
+    {
+      titulo: "Operaciones",
+      color: "blue",
+      modulos: [
+        { href: "/dashboard/ventas",      icon: FileText,     label: "Ventas" },
+        { href: "/dashboard/compras",     icon: ShoppingCart, label: "Compras" },
+        { href: "/dashboard/clientes",    icon: Users,        label: "Clientes" },
+        { href: "/dashboard/proveedores", icon: Truck,        label: "Proveedores" },
+        { href: "/dashboard/inventario",  icon: Package,      label: "Inventario" },
+        { href: "/dashboard/tasa-cambio", icon: DollarSign,   label: "Tasa de Cambio" },
+        { href: "/dashboard/reportes",    icon: BarChart3,    label: "Reportes" },
+        ...(can("pos_ver") ? [{ href: "/dashboard/pos", icon: Store, label: "Punto de Venta" }] : []),
+        ...(can("caja_bancos_ver") ? [
+          { href: "/dashboard/caja-bancos", icon: Landmark, label: "Caja y Bancos" },
+          { href: "/dashboard/caja-bancos/arqueos", icon: Calculator, label: "Arqueos de Caja" },
+        ] : []),
+      ],
+    },
+    {
+      titulo: "Contabilidad",
+      color: "indigo",
+      modulos: [
+        { href: "/dashboard/contabilidad",              icon: ClipboardList, label: "Asientos (Diario)" },
+        { href: "/dashboard/contabilidad/plan-cuentas",  icon: BookText,      label: "Plan de Cuentas" },
+        { href: "/dashboard/contabilidad/mayor",         icon: BookOpen,      label: "Libro Mayor" },
+        { href: "/dashboard/contabilidad/balance",       icon: TrendingUp,    label: "Balance" },
+        { href: "/dashboard/estados-financieros",        icon: FileBarChart2, label: "Estados Financieros" },
+      ],
+    },
+    ...(can("nomina_ver") ? [{
+      titulo: "Nómina",
+      color: "purple" as const,
+      modulos: [
+        { href: "/dashboard/nomina/empleados",     icon: UserCheck,     label: "Empleados y Cargos" },
+        { href: "/dashboard/nomina/planilla",      icon: CalendarDays,  label: "Planilla Salarial" },
+        { href: "/dashboard/nomina/prestaciones",  icon: Gift,          label: "Prestaciones Sociales" },
+        { href: "/dashboard/nomina/reportes",      icon: FileBarChart2, label: "Reportes INSS/INATEC" },
+      ],
+    }] : []),
+    {
+      titulo: "Tributación DGI",
+      color: "green",
+      modulos: [
+        { href: "/dashboard/activos-fijos",            icon: Building2,     label: "Activos Fijos" },
+        { href: "/dashboard/tributacion",               icon: Calculator,    label: "Calendario Tributario" },
+        { href: "/dashboard/tributacion/ir-anual",      icon: FileText,      label: "IR Anual — F106" },
+        { href: "/dashboard/tributacion/anticipos-ir",  icon: DollarSign,    label: "Anticipos IR" },
+        { href: "/dashboard/tributacion/imi",           icon: Building2,     label: "IMI Municipal" },
+        { href: "/dashboard/tributacion/isc",           icon: Banknote,      label: "ISC" },
+        { href: "/dashboard/tributacion/retenciones",   icon: FileBarChart2, label: "Retenciones Definitivas" },
+        ...(can("vet_ver") ? [{ href: "/dashboard/vet", icon: ShieldCheck, label: "Cumplimiento VET" }] : []),
+      ],
+    },
+    {
+      titulo: "Contabilidad Avanzada",
+      color: "amber",
+      modulos: [
+        { href: "/dashboard/cxc",                   icon: CreditCard,  label: "Cuentas por Cobrar" },
+        { href: "/dashboard/cxp",                   icon: ShoppingBag, label: "Cuentas por Pagar" },
+        { href: "/dashboard/conciliacion-bancaria", icon: GitMerge,    label: "Conciliación Bancaria" },
+        { href: "/dashboard/cierre-contable",       icon: Lock,        label: "Cierre Contable" },
+        { href: "/dashboard/notas-credito-debito",  icon: FileX,       label: "Notas Crédito/Débito" },
+      ],
+    },
+    ...((can("usuarios_ver") || can("configuracion")) ? [{
+      titulo: "Administración",
+      color: "slate" as const,
+      modulos: [
+        ...(can("usuarios_ver") ? [{ href: "/dashboard/empresa/usuarios", icon: UserCog, label: "Usuarios y Roles" }] : []),
+        ...(can("configuracion") ? [
+          { href: "/dashboard/empresa", icon: Building2, label: "Mi Empresa" },
+          { href: "/dashboard/configuracion", icon: Settings, label: "Configuración" },
+        ] : []),
+      ],
+    }] : []),
+  ];
+
+  let cardIndex = 0;
+  const COLS = 4;
+
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="font-display text-2xl font-bold text-slate-900">
-          Bienvenido, {stats.nombreEmpresa}
-        </h1>
-        <p className="text-slate-500 mt-1 text-sm capitalize">Resumen de {stats.mes}</p>
+    <div className="relative max-w-6xl mx-auto">
+      {/* Decoración de fondo sutil */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden -z-10">
+        <div className="absolute top-10 -left-10 w-72 h-72 bg-blue-200/30 rounded-full blur-3xl" />
+        <div className="absolute top-40 -right-10 w-80 h-80 bg-indigo-200/30 rounded-full blur-3xl" />
       </div>
 
-      {!stats.tieneEmpresa && (
-        <>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-4 flex items-start gap-4">
-            <AlertTriangle className="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-amber-900">No se encontraron datos de tu empresa</p>
-              <p className="text-amber-700 text-sm mt-1">
-                Puede que el registro no se completó correctamente. Ve a <strong>Mi Empresa</strong> para verificar o
-                cierra sesión y regístrate de nuevo.
-              </p>
-              <Link href="/dashboard/empresa" className="text-amber-800 underline text-sm font-medium mt-2 inline-block">
-                Ir a Mi Empresa →
-              </Link>
-            </div>
-          </div>
-          {/* Panel de diagnóstico - solo visible cuando no hay empresa */}
-          {debugInfo && (
-            <div className="bg-slate-800 text-green-400 rounded-xl p-4 mb-6 font-mono text-xs break-all">
-              <p className="text-slate-400 mb-1 font-sans text-xs font-semibold">🔍 Diagnóstico (comparte esto si necesitas soporte):</p>
-              {debugInfo}
-            </div>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="text-center mb-10"
+      >
+        <h1 className="font-display text-3xl md:text-4xl font-bold">
+          Bienvenido
+          {nombreEmpresa && (
+            <>
+              ,{" "}
+              <span className="bg-gradient-to-r from-amber-500 to-amber-600 bg-clip-text text-transparent">
+                {nombreEmpresa}
+              </span>
+            </>
           )}
-        </>
-      )}
+        </h1>
+        <p className="text-slate-500 mt-2 text-sm">¿Qué quieres hacer hoy?</p>
+      </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
-        <StatCard icon={FileText}     label="Ventas del mes"  value={formatCurrency(stats.totalVentasMes)}  sub={`${stats.totalFacturas} facturas`} color="blue" />
-        <StatCard icon={ShoppingCart} label="Compras del mes" value={formatCurrency(stats.totalComprasMes)} color="purple" />
-        <StatCard icon={TrendingUp}   label="Utilidad bruta"  value={formatCurrency(stats.totalVentasMes - stats.totalComprasMes)} color="green" />
-        <StatCard icon={Package}      label="Stock bajo"      value={String(stats.productosStockBajo)} sub="productos" color={stats.productosStockBajo > 0 ? "red" : "gray"} />
-      </div>
+      <div className="space-y-10">
+        {grupos.map((grupo) => {
+          const relleno = (COLS - (grupo.modulos.length % COLS)) % COLS;
+          return (
+            <div key={grupo.titulo}>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4 px-1">
+                {grupo.titulo}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {grupo.modulos.map((m) => {
+                  const i = cardIndex++;
+                  return (
+                    <motion.div
+                      key={m.href}
+                      initial="hidden"
+                      animate="show"
+                      custom={i}
+                      variants={fadeUp}
+                    >
+                      <Link
+                        href={m.href}
+                        className={`group relative overflow-hidden flex flex-col items-center justify-center gap-3 text-center rounded-2xl p-5 h-full bg-gradient-to-br shadow-lg transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl ${CARD_CLASSES[grupo.color]}`}
+                      >
+                        {/* Ripple / glow al hover */}
+                        <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.35),transparent_70%)] opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-500" />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <QuickAction href="/dashboard/ventas"   icon={FileText}     title="Nueva Factura"    desc="Emite una factura de venta a tus clientes" color="bg-brand-700"  />
-        <QuickAction href="/dashboard/compras"  icon={ShoppingCart} title="Registrar Compra" desc="Registra una compra a tus proveedores"      color="bg-purple-700" />
-        <QuickAction href="/dashboard/reportes" icon={TrendingUp}   title="Ver Reportes DGI" desc="Libros de ventas y compras para la DGI"    color="bg-green-700"  />
+                        <div className="relative w-12 h-12 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:bg-white/25">
+                          <m.icon className="w-6 h-6 text-white" />
+                        </div>
+                        <p className="relative text-sm font-semibold text-white leading-snug">
+                          {m.label}
+                        </p>
+                      </Link>
+                    </motion.div>
+                  );
+                })}
+
+                {relleno > 0 && Array.from({ length: relleno }).map((_, i) => (
+                  <div
+                    key={`placeholder-${grupo.titulo}-${i}`}
+                    className="flex flex-col items-center justify-center gap-3 text-center rounded-2xl p-5 h-full border-2 border-dashed border-slate-200 text-slate-300"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center">
+                      <Package className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm font-medium">Módulo personalizable</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value, sub, color }: {
-  icon: React.ElementType; label: string; value: string; sub?: string;
-  color: "blue"|"purple"|"green"|"red"|"gray";
-}) {
-  const cls = {
-    blue:   "bg-blue-100 text-blue-700",
-    purple: "bg-purple-100 text-purple-700",
-    green:  "bg-green-100 text-green-700",
-    red:    "bg-red-100 text-red-700",
-    gray:   "bg-slate-100 text-slate-600",
-  }[color];
-  return (
-    <div className="card flex items-start gap-4">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${cls}`}>
-        <Icon className="w-5 h-5" />
-      </div>
-      <div>
-        <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
-        <p className="font-display text-2xl font-bold text-slate-900">{value}</p>
-        {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
-      </div>
-    </div>
-  );
-}
-
-function QuickAction({ href, icon: Icon, title, desc, color }: {
-  href: string; icon: React.ElementType; title: string; desc: string; color: string;
-}) {
-  return (
-    <Link href={href} className="card hover:shadow-md transition-all group flex items-start gap-4">
-      <div className={`w-11 h-11 rounded-xl ${color} flex items-center justify-center flex-shrink-0`}>
-        <Icon className="w-5 h-5 text-white" />
-      </div>
-      <div className="flex-1">
-        <p className="font-semibold text-slate-900 group-hover:text-brand-700 transition-colors">{title}</p>
-        <p className="text-sm text-slate-500 mt-0.5">{desc}</p>
-      </div>
-      <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-brand-500 mt-0.5 transition-colors" />
-    </Link>
   );
 }

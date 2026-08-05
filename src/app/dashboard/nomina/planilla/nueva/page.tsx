@@ -140,6 +140,7 @@ export default function NuevaPlanillaPage() {
         otrosDescuentos:     f.otros_descuentos,
         regimenInss:         f.regimen_inss as any,
         mesActual:           periodo.mes,
+        anioActual:          periodo.anio,
         acumBrutoAnteriores: ac.acumBruto,
         acumINSSAnteriores:  ac.acumINSS,
         acumIRAnteriores:    ac.acumIR,

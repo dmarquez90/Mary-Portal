@@ -1,11 +1,11 @@
 // src/lib/asientos-automaticos.ts
 // ============================================================
-// SARA — Asientos Contables Automáticos
+// Siconic — Asientos Contables Automáticos
 // Genera asientos de partida doble desde ventas y compras
 // Basado en Ley 822 LCT y NIIF PYMES
 // ============================================================
 
-// Códigos de cuentas estándar del plan predeterminado SARA
+// Códigos de cuentas estándar del plan predeterminado Siconic
 // Si el usuario modifica su plan de cuentas, estos códigos deben coincidir
 const COD = {
   // Activo

@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { UserPlus, Ban, CheckCircle2, Settings2, Eye, EyeOff, Trash2 } from "lucide-react";
-import { usePermissionsSARA } from "@/hooks/usePermissionsSARA";
+import { usePermissionsSiconic } from "@/hooks/usePermissionsSiconic";
 import { MODULOS_PERMISOS, type Rol, type PermisosCustom } from "@/lib/permissions";
 
 interface UsuarioEmpresa {
@@ -23,7 +23,7 @@ interface UsuarioEmpresa {
 const ROLES: Rol[] = ["admin", "contador", "auxiliar", "ventas", "cajero"];
 
 export default function UsuariosEmpresaPage() {
-  const { loading: cargandoPermisos, empresaId, can, rol } = usePermissionsSARA();
+  const { loading: cargandoPermisos, empresaId, can, rol } = usePermissionsSiconic();
   const [usuarios, setUsuarios] = useState<UsuarioEmpresa[]>([]);
   const [loading, setLoading] = useState(true);
   const [creando, setCreando] = useState(false);

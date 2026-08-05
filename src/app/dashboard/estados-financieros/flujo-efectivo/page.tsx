@@ -1,6 +1,6 @@
 'use client'
 // src/app/dashboard/estados-financieros/flujo-efectivo/page.tsx
-// SARA - Estado de Flujo de Efectivo (Método Indirecto)
+// Siconic - Estado de Flujo de Efectivo (Método Indirecto)
 // NIIF PYMES Sección 7
 
 import { useState, useEffect, useCallback } from 'react'

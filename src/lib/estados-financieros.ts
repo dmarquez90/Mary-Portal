@@ -1,5 +1,5 @@
 // lib/estados-financieros.ts
-// SARA - Fase 3: Motor de cálculo de Estados Financieros
+// Siconic - Fase 3: Motor de cálculo de Estados Financieros
 // Ley 822 LCT Nicaragua | NIIF PYMES Secciones 3-7
 
 // ─────────────────────────────────────────────────────────────────────

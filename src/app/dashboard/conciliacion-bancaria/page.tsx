@@ -91,7 +91,7 @@ export default function ConciliacionPage() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Conciliación Bancaria</h1>
-        <p className="text-sm text-gray-500 mt-1">Matching extracto bancario vs. movimientos SARA — Requerido para auditoría DGI</p>
+        <p className="text-sm text-gray-500 mt-1">Matching extracto bancario vs. movimientos Siconic — Requerido para auditoría DGI</p>
       </div>
 
       {/* Selección cuenta y período */}
@@ -199,9 +199,9 @@ export default function ConciliacionPage() {
               )}
             </div>
 
-            {/* Transacciones SARA sin conciliar */}
+            {/* Transacciones Siconic sin conciliar */}
             <div>
-              <h2 className="font-semibold text-gray-700 mb-3">Transacciones SARA sin Conciliar</h2>
+              <h2 className="font-semibold text-gray-700 mb-3">Transacciones Siconic sin Conciliar</h2>
               {transacciones.length === 0 ? (
                 <div className="border-2 border-dashed rounded-xl p-8 text-center text-gray-400">
                   <GitMerge size={32} className="mx-auto mb-2 opacity-30" />

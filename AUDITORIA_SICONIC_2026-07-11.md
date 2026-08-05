@@ -1,4 +1,4 @@
-# Auditoría técnica y contable — SARA ERP
+# Auditoría técnica y contable — Siconic ERP
 **Fecha:** 11 de julio de 2026
 **Alcance:** cálculos de nómina, tributación, asientos automáticos (TS + triggers SQL), estados financieros, relaciones entre módulos.
 

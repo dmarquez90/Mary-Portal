@@ -1,10 +1,10 @@
 // ============================================================
-// SARA ERP — Asientos Automáticos de Nómina
+// Siconic ERP — Asientos Automáticos de Nómina
 // Genera partida doble completa al aprobar planilla
 // Ley 539 · LCT · NIIF PYMES
 // ============================================================
 
-// Códigos de cuentas del plan SARA para nómina
+// Códigos de cuentas del plan Siconic para nómina
 const COD_NOMINA = {
   // Gastos (Débito al registrar planilla)
   SUELDOS:           '6.1.01',

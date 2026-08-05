@@ -1,4 +1,4 @@
-# Manual rápido de registros — SARA ERP
+# Manual rápido de registros — Siconic ERP
 Cómo registrar cada operación y qué hace el sistema en contabilidad automáticamente.
 
 ---

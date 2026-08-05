@@ -1,6 +1,6 @@
-# Resumen de correcciones y mejoras — SARA ERP
+# Resumen de correcciones y mejoras — Siconic ERP
 **Fecha:** 11 de julio de 2026
-**Estado:** TypeScript compila sin errores ✔ · Migración aplicada a Supabase (SARA-app) ✔ · Datos históricos reparados ✔
+**Estado:** TypeScript compila sin errores ✔ · Migración aplicada a Supabase (Siconic-app) ✔ · Datos históricos reparados ✔
 
 ---
 

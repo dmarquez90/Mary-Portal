@@ -28,7 +28,7 @@ const ESTADO_INICIAL: EstadoPermisos = {
 // pasa empresaIdActiva, se resuelve automáticamente a la única empresa donde
 // el usuario tiene una fila en empresa_usuarios. Cuando exista invitación a
 // múltiples empresas, este hook deberá recibir el id desde un switcher real.
-export function usePermissionsSARA(empresaIdActiva?: string) {
+export function usePermissionsSiconic(empresaIdActiva?: string) {
   const [estado, setEstado] = useState<EstadoPermisos>(ESTADO_INICIAL);
 
   useEffect(() => {

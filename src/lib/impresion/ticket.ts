@@ -1,5 +1,5 @@
 // ============================================================
-// SARA — Impresión de tickets de venta (58mm / 80mm)
+// Siconic — Impresión de tickets de venta (58mm / 80mm)
 // Compartido entre el detalle de factura y el Punto de Venta.
 // Usa window.print sobre una ventana emergente, sin dependencias.
 // ============================================================
@@ -83,7 +83,7 @@ export function imprimirTicket(
   ${sep('=')}
   ${pago}
   <div style="text-align:center;font-size:10px">¡Gracias por su compra!</div>
-  <div style="text-align:center;font-size:10px">Generado por SARA · Nicaragua</div>
+  <div style="text-align:center;font-size:10px">Generado por Siconic · Nicaragua</div>
   <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();}}</script>
   </body></html>`
 

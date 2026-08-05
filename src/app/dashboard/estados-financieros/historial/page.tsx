@@ -1,6 +1,6 @@
 'use client'
 // src/app/dashboard/estados-financieros/historial/page.tsx
-// SARA - Historial de estados financieros guardados
+// Siconic - Historial de estados financieros guardados
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'

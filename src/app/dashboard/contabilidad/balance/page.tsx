@@ -1,6 +1,6 @@
 'use client'
 // src/app/dashboard/contabilidad/balance/page.tsx
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                 'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -188,7 +188,7 @@ export default function BalanceComprobacionPage() {
                 </thead>
                 <tbody>
                   {porTipo.map(({ tipo, cuentas: cuentasTipo }) => (
-                    <>
+                    <React.Fragment key={tipo}>
                       {/* Separador por tipo */}
                       <tr key={`sep-${tipo}`} className="border-b border-gray-100">
                         <td colSpan={7} className="px-4 py-1.5">
@@ -238,7 +238,7 @@ export default function BalanceComprobacionPage() {
                           {fmt(cuentasTipo.reduce((s, c) => s + c.saldo_acreedor, 0))}
                         </td>
                       </tr>
-                    </>
+                    </React.Fragment>
                   ))}
                 </tbody>
                 <tfoot>

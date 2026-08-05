@@ -394,7 +394,7 @@ export default function ReportesPage() {
       const XLSX = await import("xlsx-js-style" as string) as typeof import("xlsx");
       let wb = XLSX.utils.book_new();
       const mesNombre = nombreMes(datos.mes ?? mesSeleccionado);
-      const empresa = datos.empresa?.nombre ?? "SARA ERP";
+      const empresa = datos.empresa?.nombre ?? "Siconic ERP";
 
       /* ─ Helper: estilizar worksheet ─ */
       function applyStyles(ws: Record<string, unknown>, hdrRow: number, numCols: number) {
@@ -483,35 +483,63 @@ export default function ReportesPage() {
         }
 
       } else if (tipo === "credito") {
-        const compras = datos.compras ?? [];
-        const headers = ["Numero RUC","Nombre y Apellido o Razon Social","Numero Documento","Descripcion del Pago","Fecha de Emision de Documento","Ingreso sin IVA","Monto IVA Trasladado","Codigo Renglon"];
-        // Solo compras que efectivamente traen IVA acreditable; la guía DMI
-        // exige fecha dd/mm/aaaa y prohíbe filas de totales en la planilla.
-        const rows = compras.filter(c => c.iva_total > 0).map(c => {
+        // Plantilla oficial de Crédito Fiscal IVA: se llena la plantilla real
+        // de la DGI (mismo criterio que Planilla de Ingresos e ISC) en vez de
+        // reconstruir la hoja desde cero, para preservar estructura y metadatos.
+        const compras = (datos.compras ?? []).filter(c => c.iva_total > 0);
+        const respIva = await fetch("/plantillas-vet/dgi-credito-fiscal-iva.xlsx");
+        if (!respIva.ok) throw new Error("No se encontró la plantilla oficial en /plantillas-vet");
+        wb = XLSX.read(await respIva.arrayBuffer(), { type: "array", cellStyles: true });
+        const wsIva = wb.Sheets["CREDITO FISCAL IVA"];
+        if (!wsIva) throw new Error("La plantilla oficial no tiene la hoja esperada");
+
+        let filaIva = 2; // los datos inician bajo el encabezado de la fila 1
+        for (const c of compras) {
           const fp = c.fecha_compra?.split("-") ?? [];
           const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
-          return [c.proveedor_ruc, c.proveedor_nombre, c.numero_factura_proveedor ?? c.numero_compra, "Compra de bienes y servicios", fecha, c.subtotal, c.iva_total, "105"];
-        });
-        const ws2 = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        ws2["!cols"] = [{ wch: 18 },{ wch: 35 },{ wch: 20 },{ wch: 30 },{ wch: 20 },{ wch: 16 },{ wch: 16 },{ wch: 12 }];
-        applyStyles(ws2 as Record<string, unknown>, 0, 8);
-        XLSX.utils.book_append_sheet(wb, ws2, "CREDITO FISCAL IVA");
+          XLSX.utils.sheet_add_aoa(wsIva, [[
+            c.proveedor_ruc,
+            c.proveedor_nombre,
+            c.numero_factura_proveedor ?? c.numero_compra,
+            "Compra de bienes y servicios",
+            fecha,
+            c.subtotal,
+            c.iva_total,
+            "105",
+          ]], { origin: `A${filaIva}` });
+          filaIva++;
+        }
 
       } else if (tipo === "retenciones") {
-        const compras = datos.compras ?? [];
-        const headers = ["No. RUC","NOMBRE Y APELLIDOS Ó RAZÓN SOCIAL","INGRESOS BRUTOS MENSUALES","VALOR COTIZACIÓN INSS","VALOR FONDO PENSIONES AHORRO","NÚMERO DE DOCUMENTO","FECHA DE DOCUMENTO","BASE IMPONIBLE","VALOR RETENIDO","ALÍCUOTA DE RETENCIÓN","CÓDIGO DE RETENCIÓN"];
-        // Toda compra con retención registrada, con su código real del
-        // catálogo (22 general 2%, 27 servicios profesionales 10%, etc.)
-        const rows = compras.filter(c => c.retencion_ir > 0).map(c => {
+        // Plantilla oficial de Retenciones en la Fuente: mismo criterio —
+        // se llena el archivo real de la DGI fila por fila.
+        const compras = (datos.compras ?? []).filter(c => c.retencion_ir > 0);
+        const respRet = await fetch("/plantillas-vet/dgi-retenciones-fuente.xlsx");
+        if (!respRet.ok) throw new Error("No se encontró la plantilla oficial en /plantillas-vet");
+        wb = XLSX.read(await respRet.arrayBuffer(), { type: "array", cellStyles: true });
+        const wsRet = wb.Sheets["Hoja1"];
+        if (!wsRet) throw new Error("La plantilla oficial no tiene la hoja esperada");
+
+        let filaRet = 2; // los datos inician bajo el encabezado de la fila 1
+        for (const c of compras) {
           const fp = c.fecha_compra?.split("-") ?? [];
           const fecha = fp.length === 3 ? `${fp[2]}/${fp[1]}/${fp[0]}` : c.fecha_compra;
           const codigo = c.retencion_codigo ?? "22";
-          return [c.proveedor_ruc, c.proveedor_nombre, c.subtotal, 0, 0, c.numero_factura_proveedor ?? c.numero_compra, fecha, c.subtotal, c.retencion_ir, alicuotaLabel(codigo), codigo];
-        });
-        const ws3 = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        ws3["!cols"] = [{ wch: 18 },{ wch: 35 },{ wch: 18 },{ wch: 18 },{ wch: 18 },{ wch: 20 },{ wch: 15 },{ wch: 15 },{ wch: 15 },{ wch: 12 },{ wch: 12 }];
-        applyStyles(ws3 as Record<string, unknown>, 0, 11);
-        XLSX.utils.book_append_sheet(wb, ws3, "Hoja1");
+          XLSX.utils.sheet_add_aoa(wsRet, [[
+            c.proveedor_ruc,
+            c.proveedor_nombre,
+            c.subtotal,   // Ingresos Brutos Mensuales
+            0,             // Valor Cotización INSS — no aplica a retención sobre compras
+            0,             // Valor Fondo Pensiones Ahorro — no aplica a retención sobre compras
+            c.numero_factura_proveedor ?? c.numero_compra,
+            fecha,
+            c.subtotal,    // Base Imponible
+            c.retencion_ir,
+            alicuotaLabel(codigo),
+            codigo,
+          ]], { origin: `A${filaRet}` });
+          filaRet++;
+        }
 
       } else if (tipo === "credito_isc") {
         // Planilla oficial de Crédito Fiscal ISC: se llena la plantilla de la
@@ -585,7 +613,7 @@ export default function ReportesPage() {
       }
 
       const nombreMesStr = nombreMes(mesSeleccionado);
-      XLSX.writeFile(wb, `SARA_${tipo.toUpperCase()}_${nombreMesStr}_${anioSeleccionado}.xlsx`);
+      XLSX.writeFile(wb, `Siconic_${tipo.toUpperCase()}_${nombreMesStr}_${anioSeleccionado}.xlsx`);
       toast.success(`${label} descargado exitosamente`);
 
     } catch (err) {

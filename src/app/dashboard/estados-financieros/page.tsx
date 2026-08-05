@@ -1,6 +1,6 @@
 'use client'
 // src/app/dashboard/estados-financieros/page.tsx
-// SARA - Hub de Estados Financieros
+// Siconic - Hub de Estados Financieros
 // Módulo 3 - Fase 3
 
 import { useState } from 'react'

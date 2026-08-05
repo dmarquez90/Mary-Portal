@@ -20,27 +20,47 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: "Sora", "Inter", sans-serif;
   }
+
+  /* Filas de tabla con transición y ligero resalte al pasar el cursor,
+     y entrada suave al montar — se aplica en toda la app sin tocar cada tabla. */
+  tbody tr {
+    transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+    animation: row-fade-in 0.35s ease both;
+  }
+  tbody tr:hover {
+    background-color: rgb(248 250 252);
+  }
+
+  @keyframes row-fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes page-fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-brand-700 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-brand-700 hover:bg-brand-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none;
   }
 
   .btn-secondary {
-    @apply bg-white hover:bg-slate-50 text-brand-700 font-semibold px-5 py-2.5 rounded-lg border border-brand-200 transition-colors duration-150;
+    @apply bg-white hover:bg-slate-50 text-brand-700 font-semibold px-5 py-2.5 rounded-lg border border-brand-200 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.98];
   }
 
   .btn-danger {
-    @apply bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors duration-150;
+    @apply bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-lg transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.98];
   }
 
   .btn-ghost {
-    @apply text-slate-600 hover:text-slate-900 hover:bg-slate-100 px-3 py-2 rounded-lg transition-colors duration-150;
+    @apply text-slate-600 hover:text-slate-900 hover:bg-slate-100 px-3 py-2 rounded-lg transition-all duration-200 ease-out active:scale-[0.97];
   }
 
   .input {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 transition-colors;
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200 transition-all duration-200;
   }
 
   .label {
@@ -48,27 +68,27 @@
   }
 
   .card {
-    @apply bg-white rounded-xl border border-surface-border shadow-card p-6;
+    @apply bg-white rounded-xl border border-surface-border shadow-card p-6 transition-all duration-300 hover:shadow-soft;
   }
 
   .badge-success {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 transition-transform duration-150 hover:scale-105;
   }
 
   .badge-warning {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 transition-transform duration-150 hover:scale-105;
   }
 
   .badge-danger {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 transition-transform duration-150 hover:scale-105;
   }
 
   .badge-info {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 transition-transform duration-150 hover:scale-105;
   }
 
   .badge-gray {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 transition-transform duration-150 hover:scale-105;
   }
 
   .table-header {
@@ -77,5 +97,10 @@
 
   .table-cell {
     @apply px-4 py-3 text-sm text-slate-700 border-b border-slate-100;
+  }
+
+  /* Contenedor de página del dashboard: entrada suave al navegar entre módulos */
+  .page-enter {
+    animation: page-fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 }

@@ -3,23 +3,29 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Printer, Trash2 } from "lucide-react";
+import { ArrowLeft, Printer, Trash2, Pencil } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { getCodigoRetencion } from "@/lib/tributacion/retenciones-catalogo";
+import EditarDatosProveedorModal from "@/components/compras/EditarDatosProveedorModal";
 
 interface DetalleCompra {
   id: string;
   descripcion: string;
   cantidad: number;
   precio_unitario: number;
+  subtotal?: number;
   iva: number;
   total: number;
+  producto?: { unidad_medida?: string } | null;
 }
 
 interface Compra {
   id: string;
+  empresa_id: string;
   numero_compra: string;
+  numero_factura_proveedor?: string | null;
   fecha_compra: string;
   fecha_vencimiento?: string;
   tipo_pago: string;
@@ -27,21 +33,22 @@ interface Compra {
   subtotal: number;
   iva_total: number;
   total: number;
+  retencion_ir?: number;
+  retencion_codigo?: string | null;
+  isc_total?: number;
+  total_a_pagar?: number;
   notas?: string;
-  proveedor?: { nombre: string; ruc?: string; direccion?: string; telefono?: string; correo?: string } | null;
+  proveedor_id?: string | null;
+  proveedor?: { nombre: string; ruc?: string; direccion?: string; telefono?: string } | null;
   detalles?: DetalleCompra[];
-}
-
-interface Empresa {
-  nombre: string;
-  ruc: string;
-  direccion: string;
-  correo: string;
-  sitio_web?: string;
 }
 
 const BADGE: Record<string, string> = {
   recibida: "badge-info", pagada: "badge-success", borrador: "badge-gray", anulada: "badge-danger",
+};
+
+const TIPO_PAGO_LABEL: Record<string, string> = {
+  contado: "Contado", credito: "Crédito", transferencia: "Transferencia", cheque: "Cheque", tarjeta: "Tarjeta",
 };
 
 export default function CompraDetallePage() {
@@ -49,30 +56,23 @@ export default function CompraDetallePage() {
   const router = useRouter();
 
   const [compra,     setCompra]     = useState<Compra | null>(null);
-  const [empresa,    setEmpresa]    = useState<Empresa | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [editandoProv, setEditandoProv] = useState(false);
 
   useEffect(() => {
     async function load() {
       const { createClient } = await import("@/lib/supabase/client");
-      const { getEmpresaIdActual } = await import("@/lib/supabase/empresa-actual");
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const empresaIdActual = await getEmpresaIdActual(supabase, user.id);
-      const [{ data: en }, { data: ej }] = empresaIdActual ? await Promise.all([
-        supabase.from("empresas_persona_natural").select("nombre_completo, numero_ruc, direccion, correo_electronico, sitio_web").eq("id", empresaIdActual).maybeSingle(),
-        supabase.from("empresas_juridicas").select("nombre_empresa, numero_ruc, direccion_legal, correo_electronico, sitio_web").eq("id", empresaIdActual).maybeSingle(),
-      ]) : [{ data: null }, { data: null }];
-
-      if (en) setEmpresa({ nombre: en.nombre_completo, ruc: en.numero_ruc, direccion: en.direccion, correo: en.correo_electronico, sitio_web: en.sitio_web });
-      if (ej) setEmpresa({ nombre: ej.nombre_empresa, ruc: ej.numero_ruc, direccion: ej.direccion_legal, correo: ej.correo_electronico, sitio_web: ej.sitio_web });
-
+      // Este documento representa lo que se le compró al PROVEEDOR, no una
+      // factura emitida por la empresa — por eso no se consulta ni se
+      // muestran los datos de la propia empresa aquí.
       const { data } = await supabase
         .from("compras")
-        .select("*, proveedor:proveedores(nombre, ruc, direccion, telefono, correo), detalles:detalle_compras(*)")
+        .select("*, proveedor:proveedores(nombre, ruc, direccion, telefono), detalles:detalle_compras(*, producto:productos(unidad_medida))")
         .eq("id", params.id as string)
         .single();
 
@@ -109,15 +109,21 @@ export default function CompraDetallePage() {
 
   // ── Impresión A4 ──────────────────────────────────────────────────────────
   function handlePrint() {
-    if (!compra || !empresa) return;
+    if (!compra) return;
+
+    const tieneRetencion = Number(compra.retencion_ir) > 0;
+    const codRetencion = getCodigoRetencion(compra.retencion_codigo);
+    const totalFinal = tieneRetencion
+      ? Number(compra.total_a_pagar ?? compra.total - Number(compra.retencion_ir ?? 0))
+      : compra.total;
 
     const filas = (compra.detalles ?? []).map((d, i) => `
       <tr style="background:${i % 2 === 0 ? "#f8fafc" : "#fff"}">
         <td style="padding:8px 12px;font-size:13px">${d.descripcion}</td>
+        <td style="padding:8px 12px;font-size:13px;text-align:center">${d.producto?.unidad_medida ?? "—"}</td>
         <td style="padding:8px 12px;font-size:13px;text-align:center">${d.cantidad}</td>
         <td style="padding:8px 12px;font-size:13px;text-align:right">${formatCurrency(d.precio_unitario)}</td>
-        <td style="padding:8px 12px;font-size:13px;text-align:right">${formatCurrency(d.iva)}</td>
-        <td style="padding:8px 12px;font-size:13px;text-align:right;font-weight:700">${formatCurrency(d.total)}</td>
+        <td style="padding:8px 12px;font-size:13px;text-align:right;font-weight:700">${formatCurrency(d.subtotal ?? d.cantidad * d.precio_unitario)}</td>
       </tr>`).join("");
 
     const html = `<!DOCTYPE html>
@@ -129,7 +135,8 @@ export default function CompraDetallePage() {
   .header{display:flex;justify-content:space-between;margin-bottom:24px}
   .emp-nombre{font-size:22px;font-weight:800;color:#1e3a8a;margin-bottom:4px}
   .emp-info{font-size:12px;color:#64748b;line-height:1.7}
-  .num{font-size:28px;font-weight:800;color:#7c3aed;text-align:right}
+  .num{font-size:24px;font-weight:800;color:#7c3aed;text-align:right}
+  .doc-int{font-size:11px;color:#94a3b8;text-align:right;margin-top:2px}
   .meta{font-size:12px;color:#64748b;text-align:right;line-height:1.8;margin-top:4px}
   .divider{border:none;border-top:2.5px solid #7c3aed;margin:20px 0}
   .lbl{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
@@ -137,9 +144,9 @@ export default function CompraDetallePage() {
   thead tr{background:#7c3aed}
   thead th{padding:9px 12px;font-size:11px;font-weight:600;color:#fff;text-align:left}
   thead th:not(:first-child){text-align:right}
-  thead th:nth-child(2){text-align:center}
+  thead th:nth-child(2),thead th:nth-child(3){text-align:center}
   .totales{display:flex;justify-content:flex-end;margin-top:8px}
-  .tbox{width:240px}
+  .tbox{width:260px}
   .trow{display:flex;justify-content:space-between;font-size:13px;color:#475569;padding:3px 0}
   .tfinal{display:flex;justify-content:space-between;font-size:17px;font-weight:800;color:#7c3aed;border-top:2.5px solid #7c3aed;padding-top:8px;margin-top:4px}
   .pie{margin-top:32px;text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:12px}
@@ -148,38 +155,33 @@ export default function CompraDetallePage() {
 </style></head><body>
 <div class="header">
   <div>
-    <div class="emp-nombre">${empresa.nombre}</div>
+    <div class="lbl">Proveedor</div>
+    <div class="emp-nombre">${compra.proveedor?.nombre ?? "Proveedor no especificado"}</div>
     <div class="emp-info">
-      RUC: ${empresa.ruc}<br/>
-      ${empresa.direccion}<br/>
-      ${empresa.correo}
+      ${compra.proveedor?.ruc       ? `RUC: ${compra.proveedor.ruc}<br/>` : ""}
+      ${compra.proveedor?.direccion ? `${compra.proveedor.direccion}<br/>` : ""}
+      ${compra.proveedor?.telefono  ? `Tel: ${compra.proveedor.telefono}` : ""}
     </div>
   </div>
   <div>
-    <div class="num">${compra.numero_compra}</div>
+    <div class="lbl" style="text-align:right">No. Factura del proveedor</div>
+    <div class="num">${compra.numero_factura_proveedor || "—"}</div>
+    <div class="doc-int">Doc. interno: ${compra.numero_compra}</div>
     <div class="meta">
       Fecha: ${formatDate(compra.fecha_compra)}<br/>
-      Pago: ${compra.tipo_pago.charAt(0).toUpperCase() + compra.tipo_pago.slice(1)}<br/>
+      Pago: ${TIPO_PAGO_LABEL[compra.tipo_pago] ?? compra.tipo_pago}<br/>
       <span class="badge">${compra.estado.charAt(0).toUpperCase() + compra.estado.slice(1)}</span>
     </div>
   </div>
 </div>
 <hr class="divider"/>
-<div style="margin-bottom:20px">
-  <div class="lbl">Proveedor</div>
-  <div style="font-size:16px;font-weight:700">${compra.proveedor?.nombre ?? "Sin proveedor"}</div>
-  ${compra.proveedor?.ruc      ? `<div style="font-size:12px;color:#64748b">RUC: ${compra.proveedor.ruc}</div>` : ""}
-  ${compra.proveedor?.direccion ? `<div style="font-size:12px;color:#64748b">${compra.proveedor.direccion}</div>` : ""}
-  ${compra.proveedor?.telefono  ? `<div style="font-size:12px;color:#64748b">Tel: ${compra.proveedor.telefono}</div>` : ""}
-  ${compra.proveedor?.correo    ? `<div style="font-size:12px;color:#64748b">${compra.proveedor.correo}</div>` : ""}
-</div>
 <table>
   <thead><tr>
     <th style="text-align:left">Descripción</th>
+    <th style="text-align:center">Unidad</th>
     <th style="text-align:center">Cant.</th>
     <th style="text-align:right">Precio Unit.</th>
-    <th style="text-align:right">IVA</th>
-    <th style="text-align:right">Total</th>
+    <th style="text-align:right">Subtotal</th>
   </tr></thead>
   <tbody>${filas}</tbody>
 </table>
@@ -187,14 +189,16 @@ export default function CompraDetallePage() {
   <div class="tbox">
     <div class="trow"><span>Subtotal</span><span>${formatCurrency(compra.subtotal)}</span></div>
     <div class="trow"><span>IVA (15%)</span><span>${formatCurrency(compra.iva_total)}</span></div>
-    <div class="tfinal"><span>TOTAL</span><span>${formatCurrency(compra.total)}</span></div>
+    ${tieneRetencion ? `
+    <div class="trow" style="color:#b45309;background:#fffbeb;padding:4px 6px;border-radius:6px">
+      <span>IR retenido ${codRetencion ? `${Math.round(codRetencion.alicuota * 1000) / 10}% (Cód. ${codRetencion.codigo})` : ""}</span>
+      <span>- ${formatCurrency(Number(compra.retencion_ir))}</span>
+    </div>` : ""}
+    <div class="tfinal"><span>TOTAL</span><span>${formatCurrency(totalFinal)}</span></div>
   </div>
 </div>
 ${compra.notas ? `<div style="margin-top:20px;padding-top:16px;border-top:1px solid #e2e8f0"><div class="lbl">Notas</div><p style="font-size:12px;color:#475569">${compra.notas}</p></div>` : ""}
-<div class="pie">
-  Documento generado por Siconic<br/>
-  Nicaragua · RUC: ${empresa.ruc} · ${empresa.correo}
-</div>
+<div class="pie">Comprobante interno de compra — Documento generado por Siconic</div>
 <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</script>
 </body></html>`;
 
@@ -204,7 +208,13 @@ ${compra.notas ? `<div style="margin-top:20px;padding-top:16px;border-top:1px so
 
   // ── Ticket térmico ────────────────────────────────────────────────────────
   function handlePrintTicket(ancho: 58 | 80 = 80) {
-    if (!compra || !empresa) return;
+    if (!compra) return;
+
+    const tieneRetencionTk = Number(compra.retencion_ir) > 0;
+    const codRetencionTk = getCodigoRetencion(compra.retencion_codigo);
+    const totalFinalTk = tieneRetencionTk
+      ? Number(compra.total_a_pagar ?? compra.total - Number(compra.retencion_ir ?? 0))
+      : compra.total;
 
     const anchoMM  = ancho === 58 ? "56mm" : "78mm";
     const charWidth = ancho === 58 ? 28 : 38;
@@ -217,13 +227,13 @@ ${compra.notas ? `<div style="margin-top:20px;padding-top:16px;border-top:1px so
 
     const items = (compra.detalles ?? []).map(d => {
       const desc = cortar(d.descripcion, charWidth);
-      const iva  = d.iva > 0 ? `<div class="iva">IVA: ${formatCurrency(d.iva)}</div>` : "";
+      const unidad = d.producto?.unidad_medida ? ` ${d.producto.unidad_medida}` : "";
       return `
         <div class="item-desc">${desc}</div>
         <div class="item-row">
-          <span>${d.cantidad} x ${formatCurrency(d.precio_unitario)}</span>
-          <span class="b">${formatCurrency(d.total)}</span>
-        </div>${iva}`;
+          <span>${d.cantidad}${unidad} x ${formatCurrency(d.precio_unitario)}</span>
+          <span class="b">${formatCurrency(d.subtotal ?? d.cantidad * d.precio_unitario)}</span>
+        </div>`;
     }).join(`<div class="sep-punt">${"· ".repeat(Math.floor(charWidth / 2))}</div>`);
 
     const html = `<!DOCTYPE html>
@@ -243,7 +253,6 @@ ${compra.notas ? `<div style="margin-top:20px;padding-top:16px;border-top:1px so
   .row{display:flex;justify-content:space-between;font-size:12px;margin:1px 0}
   .item-desc{font-size:12px;font-weight:bold;margin-top:3px}
   .item-row{display:flex;justify-content:space-between;font-size:12px;padding-left:8px}
-  .iva{font-size:10px;color:#444;padding-left:8px}
   .bloque{margin:4px 0}
   .lbl{font-size:10px;font-weight:bold;letter-spacing:.05em}
   @page{size:${ancho}mm auto;margin:2mm 3mm}
@@ -251,34 +260,26 @@ ${compra.notas ? `<div style="margin-top:20px;padding-top:16px;border-top:1px so
 </style></head><body>
 
 <div class="bloque">
-  <div class="xl">${empresa.nombre}</div>
-  <div class="md">RUC: ${empresa.ruc}</div>
-  ${empresa.direccion ? `<div class="md">${empresa.direccion}</div>` : ""}
-  <div class="md">${empresa.correo}</div>
+  <div class="lbl c">PROVEEDOR</div>
+  <div class="lg">${compra.proveedor?.nombre ?? "Proveedor no especificado"}</div>
+  ${compra.proveedor?.ruc      ? `<div class="md">RUC: ${compra.proveedor.ruc}</div>` : ""}
+  ${compra.proveedor?.telefono  ? `<div class="md">Tel: ${compra.proveedor.telefono}</div>` : ""}
 </div>
 
 ${sep("=")}
 
 <div class="bloque">
-  <div class="lg">ORDEN DE COMPRA</div>
-  <div class="xl">${compra.numero_compra}</div>
+  <div class="md">No. Factura proveedor:</div>
+  <div class="xl">${compra.numero_factura_proveedor || "—"}</div>
+  <div class="sm">Doc. interno: ${compra.numero_compra}</div>
   <div class="md">${formatDate(compra.fecha_compra)}</div>
-  <div class="md">Pago: ${compra.tipo_pago.charAt(0).toUpperCase() + compra.tipo_pago.slice(1)}</div>
+  <div class="md">Pago: ${TIPO_PAGO_LABEL[compra.tipo_pago] ?? compra.tipo_pago}</div>
 </div>
 
 ${sep("=")}
 
 <div class="bloque">
-  <div class="lbl">PROVEEDOR</div>
-  <div class="b">${compra.proveedor?.nombre ?? "Sin proveedor"}</div>
-  ${compra.proveedor?.ruc      ? `<div>RUC: ${compra.proveedor.ruc}</div>` : ""}
-  ${compra.proveedor?.telefono  ? `<div>Tel: ${compra.proveedor.telefono}</div>` : ""}
-</div>
-
-${sep()}
-
-<div class="bloque">
-  <div class="row b"><span>DESCRIPCION</span><span>TOTAL</span></div>
+  <div class="row b"><span>DESCRIPCION</span><span>SUBTOTAL</span></div>
   ${sep()}
   ${items}
 </div>
@@ -288,16 +289,17 @@ ${sep("=")}
 <div class="bloque">
   ${cols("Subtotal:", formatCurrency(compra.subtotal))}
   ${cols("IVA (15%):", formatCurrency(compra.iva_total))}
+  ${tieneRetencionTk ? cols(`IR retenido${codRetencionTk ? ` (${codRetencionTk.codigo})` : ""}:`, `-${formatCurrency(Number(compra.retencion_ir))}`) : ""}
 </div>
 
 ${sep("=")}
-<div class="total-box">TOTAL: ${formatCurrency(compra.total)}</div>
+<div class="total-box">TOTAL: ${formatCurrency(totalFinalTk)}</div>
 ${sep("=")}
 
 ${compra.notas ? `<div class="bloque"><div class="lbl">NOTA:</div><div>${compra.notas}</div></div>${sep()}` : ""}
 
 <div class="bloque">
-  <div class="sm">Generado por SARA · Nicaragua</div>
+  <div class="sm">Comprobante interno de compra</div>
 </div>
 
 <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};</script>
@@ -320,6 +322,11 @@ ${compra.notas ? `<div class="bloque"><div class="lbl">NOTA:</div><div>${compra.
     </div>
   );
 
+  const tieneRetencion = Number(compra.retencion_ir) > 0;
+  const totalFinalPantalla = tieneRetencion
+    ? Number(compra.total_a_pagar ?? compra.total - Number(compra.retencion_ir ?? 0))
+    : compra.total;
+
   return (
     <>
       {/* Barra de acciones */}
@@ -338,9 +345,14 @@ ${compra.notas ? `<div class="bloque"><div class="lbl">NOTA:</div><div>${compra.
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {compra.estado !== "anulada" && (
-            <button onClick={() => setConfirmDel(true)} className="btn-ghost text-red-500 hover:text-red-700 flex items-center gap-2 text-sm">
-              <Trash2 className="w-4 h-4" /> Anular
-            </button>
+            <>
+              <button onClick={() => setEditandoProv(true)} className="btn-ghost text-amber-600 hover:text-amber-800 flex items-center gap-2 text-sm">
+                <Pencil className="w-4 h-4" /> Editar proveedor/factura
+              </button>
+              <button onClick={() => setConfirmDel(true)} className="btn-ghost text-red-500 hover:text-red-700 flex items-center gap-2 text-sm">
+                <Trash2 className="w-4 h-4" /> Anular
+              </button>
+            </>
           )}
           <button onClick={() => handlePrintTicket(58)} className="btn-secondary flex items-center gap-2 text-sm">
             <Printer className="w-4 h-4" /> Ticket 58mm
@@ -356,64 +368,65 @@ ${compra.notas ? `<div class="bloque"><div class="lbl">NOTA:</div><div>${compra.
 
       {/* Vista previa */}
       <div className="bg-white rounded-xl border border-slate-200 p-8 max-w-3xl mx-auto">
-        {/* Encabezado */}
+        {/* Encabezado: datos del PROVEEDOR (esto no es una factura nuestra) */}
         <div className="flex justify-between items-start mb-8">
           <div>
-            <h2 className="font-display text-2xl font-bold text-brand-800">{empresa?.nombre}</h2>
-            {empresa?.ruc       && <p className="text-slate-500 text-sm mt-0.5">RUC: {empresa.ruc}</p>}
-            {empresa?.direccion && <p className="text-slate-500 text-sm">{empresa.direccion}</p>}
-            {empresa?.correo    && <p className="text-slate-500 text-sm">{empresa.correo}</p>}
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Proveedor</p>
+            <h2 className="font-display text-2xl font-bold text-brand-800">{compra.proveedor?.nombre ?? "Proveedor no especificado"}</h2>
+            {compra.proveedor?.ruc       && <p className="text-slate-500 text-sm mt-0.5">RUC: {compra.proveedor.ruc}</p>}
+            {compra.proveedor?.direccion && <p className="text-slate-500 text-sm">{compra.proveedor.direccion}</p>}
+            {compra.proveedor?.telefono  && <p className="text-slate-500 text-sm">Tel: {compra.proveedor.telefono}</p>}
           </div>
           <div className="text-right">
-            <p className="font-display text-3xl font-bold text-purple-700">{compra.numero_compra}</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">No. Factura del proveedor</p>
+            <p className="font-display text-2xl font-bold text-purple-700">{compra.numero_factura_proveedor || "—"}</p>
+            <p className="text-slate-400 text-xs mt-0.5">Doc. interno: {compra.numero_compra}</p>
             <p className="text-slate-500 text-sm mt-1">Fecha: {formatDate(compra.fecha_compra)}</p>
-            <p className="text-slate-500 text-sm capitalize">Pago: {compra.tipo_pago}</p>
+            <p className="text-slate-500 text-sm">Pago: {TIPO_PAGO_LABEL[compra.tipo_pago] ?? compra.tipo_pago}</p>
           </div>
         </div>
 
         <div className="border-t-2 border-purple-700 mb-6" />
-
-        {/* Proveedor */}
-        <div className="mb-8">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Proveedor</p>
-          <p className="font-semibold text-slate-900 text-lg">{compra.proveedor?.nombre ?? "Sin proveedor"}</p>
-          {compra.proveedor?.ruc       && <p className="text-slate-500 text-sm">RUC: {compra.proveedor.ruc}</p>}
-          {compra.proveedor?.direccion && <p className="text-slate-500 text-sm">{compra.proveedor.direccion}</p>}
-          {compra.proveedor?.telefono  && <p className="text-slate-500 text-sm">Tel: {compra.proveedor.telefono}</p>}
-          {compra.proveedor?.correo    && <p className="text-slate-500 text-sm">{compra.proveedor.correo}</p>}
-        </div>
 
         {/* Tabla artículos */}
         <table className="w-full mb-8">
           <thead>
             <tr className="bg-purple-700 text-white">
               <th className="text-left px-3 py-2 text-xs font-semibold">Descripción</th>
+              <th className="text-center px-3 py-2 text-xs font-semibold">Unidad</th>
               <th className="text-center px-3 py-2 text-xs font-semibold">Cant.</th>
               <th className="text-right px-3 py-2 text-xs font-semibold">Precio Unit.</th>
-              <th className="text-right px-3 py-2 text-xs font-semibold">IVA</th>
-              <th className="text-right px-3 py-2 text-xs font-semibold">Total</th>
+              <th className="text-right px-3 py-2 text-xs font-semibold">Subtotal</th>
             </tr>
           </thead>
           <tbody>
             {compra.detalles?.map((d, i) => (
               <tr key={d.id} className={i % 2 === 0 ? "bg-slate-50" : "bg-white"}>
                 <td className="px-3 py-2 text-sm text-slate-800">{d.descripcion}</td>
+                <td className="px-3 py-2 text-sm text-center text-slate-500">{d.producto?.unidad_medida ?? "—"}</td>
                 <td className="px-3 py-2 text-sm text-center text-slate-600">{d.cantidad}</td>
                 <td className="px-3 py-2 text-sm text-right text-slate-600">{formatCurrency(d.precio_unitario)}</td>
-                <td className="px-3 py-2 text-sm text-right text-slate-600">{formatCurrency(d.iva)}</td>
-                <td className="px-3 py-2 text-sm text-right font-semibold text-slate-900">{formatCurrency(d.total)}</td>
+                <td className="px-3 py-2 text-sm text-right font-semibold text-slate-900">{formatCurrency(d.subtotal ?? d.cantidad * d.precio_unitario)}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        {/* Totales */}
+        {/* Totales: Subtotal → IVA → IR (si aplica) → Total */}
         <div className="flex justify-end mb-8">
-          <div className="w-60 space-y-1.5">
+          <div className="w-72 space-y-1.5">
             <div className="flex justify-between text-sm text-slate-600"><span>Subtotal</span><span>{formatCurrency(compra.subtotal)}</span></div>
             <div className="flex justify-between text-sm text-slate-600"><span>IVA (15%)</span><span>{formatCurrency(compra.iva_total)}</span></div>
+            {tieneRetencion && (
+              <div className="flex justify-between text-sm text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">
+                <span>
+                  IR retenido {(() => { const c = getCodigoRetencion(compra.retencion_codigo); return c ? `${Math.round(c.alicuota * 1000) / 10}% (Cód. ${c.codigo})` : ""; })()}
+                </span>
+                <span>- {formatCurrency(Number(compra.retencion_ir))}</span>
+              </div>
+            )}
             <div className="border-t-2 border-purple-700 pt-2 flex justify-between font-bold text-lg text-purple-700">
-              <span>TOTAL</span><span>{formatCurrency(compra.total)}</span>
+              <span>TOTAL</span><span>{formatCurrency(totalFinalPantalla)}</span>
             </div>
           </div>
         </div>
@@ -426,8 +439,7 @@ ${compra.notas ? `<div class="bloque"><div class="lbl">NOTA:</div><div>${compra.
         )}
 
         <div className="border-t border-slate-100 mt-6 pt-4 text-center text-xs text-slate-400">
-          <p>Documento generado por Siconic</p>
-          <p className="mt-0.5">Nicaragua · RUC: {empresa?.ruc} · {empresa?.correo}</p>
+          <p>Comprobante interno de compra — Documento generado por Siconic</p>
         </div>
       </div>
 
@@ -451,6 +463,29 @@ ${compra.notas ? `<div class="bloque"><div class="lbl">NOTA:</div><div>${compra.
             </div>
           </div>
         </div>
+      )}
+
+      {/* Editar proveedor / N° factura sin tocar montos ni contabilidad */}
+      {editandoProv && (
+        <EditarDatosProveedorModal
+          compraId={compra.id}
+          empresaId={compra.empresa_id}
+          proveedorIdInicial={compra.proveedor_id ?? null}
+          proveedorNombreInicial={compra.proveedor?.nombre ?? null}
+          numeroFacturaInicial={compra.numero_factura_proveedor ?? null}
+          onClose={() => setEditandoProv(false)}
+          onSaved={(datos) => {
+            setCompra(prev => prev ? {
+              ...prev,
+              proveedor_id: datos.proveedor_id,
+              proveedor: datos.proveedor_nombre
+                ? { ...(prev.proveedor ?? {}), nombre: datos.proveedor_nombre }
+                : null,
+              numero_factura_proveedor: datos.numero_factura_proveedor,
+            } : prev);
+            setEditandoProv(false);
+          }}
+        />
       )}
     </>
   );

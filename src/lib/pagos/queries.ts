@@ -1,5 +1,5 @@
 // ============================================================
-// SARA App – Queries: Pagos, Caja y Bancos
+// Siconic App – Queries: Pagos, Caja y Bancos
 // src/lib/pagos/queries.ts
 // ============================================================
 import type {
