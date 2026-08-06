@@ -7,6 +7,7 @@ export interface EmpresaPersonaNatural {
   user_id: string;
   tipo_empresa: "persona_natural" | "cuota_fija";
   nombre_completo: string;
+  nombre_comercial?: string;
   numero_cedula: string;
   numero_ruc: string;
   direccion: string;
@@ -106,6 +107,7 @@ export interface Producto {
   stock_actual: number;
   stock_minimo: number;
   aplica_iva: boolean;
+  exencion_iva_numeral?: number | null;
   activo: boolean;
   created_at: string;
 }
@@ -150,7 +152,7 @@ export interface Factura {
 
 // ─── Compras ──────────────────────────────────────────────────────────────────
 
-export type EstadoCompra = "borrador" | "recibida" | "pagada" | "anulada";
+export type EstadoCompra = "borrador" | "registrada" | "pagada" | "anulada";
 
 export interface DetalleCompra {
   id: string;

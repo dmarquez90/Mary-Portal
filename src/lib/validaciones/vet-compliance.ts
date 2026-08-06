@@ -26,7 +26,7 @@ export interface DatosValidacionVET {
   retencionesIR?: { retencionesIR2: number; comprasPN: number }
   diferencialCambiario?: { montoExtranjero: number; tasaTransaccion: number; tasaCierre: number }
   gastosF106?: { gastosDeductibles: number; donacionesAportadas: number; ingresoNeto: number }
-  nominaINSS?: { totalSalarios: number; totalINSSObrero: number; totalINSSPatronal: number }
+  nominaINSS?: { totalSalarios: number; totalINSSObrero: number; totalINSSPatronal: number; tasaInssPatronal?: number }
   balanceGeneral?: {
     activosCorriente: number
     activosNoC: number
@@ -95,6 +95,13 @@ export class ValidadorVETCompliance {
     return resultados
   }
 
+  // NOTA auditoría 2026-08-04: validarDiferencialCambiario, validarGastosF106
+  // y validarDeclaracionIVA (la fórmula de esta última es correcta: Débito
+  // Fiscal - Crédito Fiscal = Pago/Traslado) no están conectadas a ningún
+  // endpoint todavía. No se eliminan porque la lógica es válida y utilizable
+  // — declaracion_iva está pendiente solo porque falta la función SQL
+  // fn_calcular_iva_periodo que le dé los datos reales (ver validacion/route.ts).
+  // Conectarlas cuando esa función exista, en vez de reescribirlas.
   static validarDiferencialCambiario(
     montoExtranjero: number,
     tasaTransaccion: number,
@@ -134,29 +141,37 @@ export class ValidadorVETCompliance {
   static validarNominaINSS(
     totalSalarios: number,
     totalINSSObrero: number,
-    totalINSSPatronal: number
+    totalINSSPatronal: number,
+    // Tasa patronal configurable por empresa: 21.5% (<50 trabajadores) o
+    // 22.5% (>=50), Decreto 06-2019 (reforma Ley 539, régimen integral).
+    // Si no se pasa, se usa 22.5% (default histórico del sistema, ver
+    // src/lib/nomina/empresa-config.ts:getTasaInssPatronal).
+    tasaInssPatronal: number = 0.225
   ): ValidacionVET[] {
     const resultados: ValidacionVET[] = []
     const tolerancia = 100
-    const esperadoObrero = totalSalarios * 0.0625
-    const esperadoPatronal = totalSalarios * 0.1475
+    // FIX auditoría 2026-08-04: las tasas 6.25%/14.75% eran anteriores a la
+    // reforma de 2019 y ya no existen. El motor de nómina real usa 7%
+    // laboral (fijo, Ley 539 Art. 11) y 21.5-22.5% patronal (configurable).
+    const esperadoObrero = totalSalarios * 0.07
+    const esperadoPatronal = totalSalarios * tasaInssPatronal
 
     if (Math.abs(totalINSSObrero - esperadoObrero) > tolerancia) {
       resultados.push({
         campo: 'inss_obrero',
-        regla: 'inss_obrero_6_25',
+        regla: 'inss_obrero_7',
         tipo: 'warning',
-        mensaje: `El INSS obrero reportado (C$${totalINSSObrero.toFixed(2)}) se desvía del esperado (C$${esperadoObrero.toFixed(2)}, 6.25% del salario) en más de C$${tolerancia}`,
-        referenciaLey: 'Reglamento General de la Ley de Seguridad Social',
+        mensaje: `El INSS laboral reportado (C$${totalINSSObrero.toFixed(2)}) se desvía del esperado (C$${esperadoObrero.toFixed(2)}, 7% del salario) en más de C$${tolerancia}`,
+        referenciaLey: 'Ley 539, Art. 11',
       })
     }
     if (Math.abs(totalINSSPatronal - esperadoPatronal) > tolerancia) {
       resultados.push({
         campo: 'inss_patronal',
-        regla: 'inss_patronal_14_75',
+        regla: 'inss_patronal_21_5_22_5',
         tipo: 'warning',
-        mensaje: `El INSS patronal reportado (C$${totalINSSPatronal.toFixed(2)}) se desvía del esperado (C$${esperadoPatronal.toFixed(2)}, 14.75% del salario) en más de C$${tolerancia}`,
-        referenciaLey: 'Reglamento General de la Ley de Seguridad Social',
+        mensaje: `El INSS patronal reportado (C$${totalINSSPatronal.toFixed(2)}) se desvía del esperado (C$${esperadoPatronal.toFixed(2)}, ${(tasaInssPatronal * 100).toFixed(1)}% del salario, régimen integral) en más de C$${tolerancia}`,
+        referenciaLey: 'Ley 539, Art. 11 / Decreto 06-2019',
       })
     }
     return resultados
@@ -231,8 +246,8 @@ export class ValidadorVETCompliance {
       resultados.push(...this.validarGastosF106(gastosDeductibles, donacionesAportadas, ingresoNeto))
     }
     if (datos.nominaINSS) {
-      const { totalSalarios, totalINSSObrero, totalINSSPatronal } = datos.nominaINSS
-      resultados.push(...this.validarNominaINSS(totalSalarios, totalINSSObrero, totalINSSPatronal))
+      const { totalSalarios, totalINSSObrero, totalINSSPatronal, tasaInssPatronal } = datos.nominaINSS
+      resultados.push(...this.validarNominaINSS(totalSalarios, totalINSSObrero, totalINSSPatronal, tasaInssPatronal))
     }
     if (datos.balanceGeneral) {
       const { activosCorriente, activosNoC, pasivosCorriente, pasivosNoC, patrimonio } = datos.balanceGeneral

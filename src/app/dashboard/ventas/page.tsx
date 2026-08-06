@@ -101,7 +101,7 @@ export default function VentasPage() {
               <span className="text-xs text-green-500">· {formatDate(tasaHoy.fecha)}</span>
             </div>
           )}
-          <Link href="/dashboard/ventas/nueva" className="btn-primary flex items-center gap-2">
+          <Link href="/dashboard/ingreso-datos/venta" className="btn-primary flex items-center gap-2">
             <Plus className="w-4 h-4" /> Nueva factura
           </Link>
         </div>
@@ -168,7 +168,7 @@ export default function VentasPage() {
               {hayFiltros ? "No hay facturas con esos filtros" : "No hay facturas aún"}
             </p>
             {!hayFiltros
-              ? <Link href="/dashboard/ventas/nueva" className="btn-primary inline-flex items-center gap-2 mt-4"><Plus className="w-4 h-4" /> Nueva factura</Link>
+              ? <Link href="/dashboard/ingreso-datos/venta" className="btn-primary inline-flex items-center gap-2 mt-4"><Plus className="w-4 h-4" /> Nueva factura</Link>
               : <button onClick={limpiarFiltros} className="btn-secondary inline-flex items-center gap-2 mt-4"><X className="w-4 h-4" /> Limpiar filtros</button>
             }
           </div>

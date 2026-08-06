@@ -39,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   const body = await req.json()
-  const { accion, empresa_id, fecha_pago, forma_pago } = body
+  const { accion, empresa_id, fecha_pago, forma_pago, cuenta_caja_id, cuenta_banco_id } = body
 
   const { data: planilla } = await supabase
     .from('planillas')
@@ -73,20 +73,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   // FIX auditoría: registrar el pago de la nómina (antes crearAsientoPagoNomina
-  // existía pero nunca se llamaba, y el pago no tocaba caja/banco en libros)
+  // existía pero nunca se llamaba, y el pago no tocaba caja/banco en libros).
+  // Ahora también inserta en movimientos_caja/transacciones_banco (según la
+  // cuenta específica elegida) para que el saldo_actual de Caja y Bancos
+  // refleje el pago, igual que en Ventas/Compras.
   if (accion === 'pagar') {
     if (planilla.estado !== 'aprobada') {
       return NextResponse.json({ error: 'La planilla debe estar aprobada antes de pagarse' }, { status: 409 })
     }
+    if (!cuenta_caja_id && !cuenta_banco_id) {
+      return NextResponse.json({ error: 'Debe seleccionar una cuenta de caja o banco para el pago' }, { status: 400 })
+    }
 
-    await crearAsientoPagoNomina(supabase, empresa_id, {
+    const resultado = await crearAsientoPagoNomina(supabase, empresa_id, {
       id:               planilla.id,
       periodo_mes:      planilla.periodo_mes,
       periodo_anio:     planilla.periodo_anio,
       fecha_pago:       fecha_pago || planilla.fecha_pago || new Date().toISOString().split('T')[0],
       total_neto_pagar: Number(planilla.total_neto_pagar ?? 0),
       forma_pago:       forma_pago === 'caja' ? 'caja' : 'banco',
+      cuenta_caja_id:   cuenta_caja_id || undefined,
+      cuenta_banco_id:  cuenta_banco_id || undefined,
     })
+
+    if (!resultado.ok) {
+      return NextResponse.json({ error: resultado.error }, { status: 500 })
+    }
 
     const { data, error } = await supabase
       .from('planillas')

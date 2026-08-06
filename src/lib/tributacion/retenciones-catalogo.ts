@@ -16,6 +16,7 @@ export interface CodigoRetencion {
 }
 
 export const CODIGOS_RETENCION: CodigoRetencion[] = [
+  { codigo: '21', descripcion: 'Pagos con tarjeta de crédito o débito (1.5%)',              alicuota: 0.015, umbral: 0 },
   { codigo: '22', descripcion: 'Compra de bienes y servicios en general (2%)',              alicuota: 0.02, umbral: 1000 },
   { codigo: '23', descripcion: 'Trabajos de construcción (2%)',                             alicuota: 0.02, umbral: 1000 },
   { codigo: '24', descripcion: 'Alquiler y arrendamiento (2%)',                             alicuota: 0.02, umbral: 0 },

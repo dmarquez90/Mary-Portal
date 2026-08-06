@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, CheckCircle, Download, FileSpreadsheet } from 'lucide-react'
+import { ArrowLeft, CheckCircle, Download } from 'lucide-react'
 import { formatearMes } from '@/lib/nomina/calculos'
 import { createClient } from '@/lib/supabase/client'
 import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
@@ -52,6 +52,9 @@ interface Planilla {
 
 const fmt = (n: number) => `C$ ${n.toLocaleString('es-NI', { minimumFractionDigits: 2 })}`
 
+interface CuentaCaja  { id: string; nombre: string; moneda: string }
+interface CuentaBanco { id: string; nombre: string; banco: string | null; moneda: string }
+
 export default function DetallePlanillaPage() {
   const { id }  = useParams<{ id: string }>()
   const router  = useRouter()
@@ -59,6 +62,9 @@ export default function DetallePlanillaPage() {
   const [loading, setLoading]   = useState(true)
   const [aprobando, setAprobando] = useState(false)
   const [empresaId, setEmpresaId] = useState<string | null>(null)
+  const [cuentasCaja, setCuentasCaja]   = useState<CuentaCaja[]>([])
+  const [cuentasBanco, setCuentasBanco] = useState<CuentaBanco[]>([])
+  const [cuentaSeleccionada, setCuentaSeleccionada] = useState('')
 
   useEffect(() => {
     const supabase = createClient()
@@ -67,6 +73,17 @@ export default function DetallePlanillaPage() {
       getEmpresaIdActual(supabase, user.id).then(eid => setEmpresaId(eid))
     })
   }, [])
+
+  useEffect(() => {
+    if (!empresaId) return
+    const supabase = createClient()
+    supabase.from('cuentas_caja').select('id, nombre, moneda')
+      .eq('empresa_id', empresaId).eq('activa', true)
+      .then(({ data }) => setCuentasCaja(data || []))
+    supabase.from('cuentas_banco').select('id, nombre, banco, moneda')
+      .eq('empresa_id', empresaId).eq('activa', true)
+      .then(({ data }) => setCuentasBanco(data || []))
+  }, [empresaId])
 
   useEffect(() => {
     if (!id) return
@@ -94,19 +111,28 @@ export default function DetallePlanillaPage() {
     setAprobando(false)
   }
 
-  async function registrarPago(formaPago: 'banco' | 'caja') {
-    if (!data || !empresaId) return
+  async function registrarPago() {
+    if (!data || !empresaId || !cuentaSeleccionada) return
+    const [tipo, cuentaId] = cuentaSeleccionada.split(':')
     setAprobando(true)
-    await fetch(`/api/nomina/planillas/${id}`, {
+    const res = await fetch(`/api/nomina/planillas/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        accion:     'pagar',
-        empresa_id: empresaId,
-        forma_pago: formaPago,
-        fecha_pago: new Date().toISOString().split('T')[0],
+        accion:          'pagar',
+        empresa_id:      empresaId,
+        forma_pago:      tipo === 'banco' ? 'banco' : 'caja',
+        cuenta_caja_id:  tipo === 'caja'  ? cuentaId : undefined,
+        cuenta_banco_id: tipo === 'banco' ? cuentaId : undefined,
+        fecha_pago:      new Date().toISOString().split('T')[0],
       }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(err.error || 'No se pudo registrar el pago')
+      setAprobando(false)
+      return
+    }
     const res2 = await fetch(`/api/nomina/planillas/${id}`)
     setData(await res2.json())
     setAprobando(false)
@@ -204,13 +230,27 @@ export default function DetallePlanillaPage() {
           )}
           {planilla.estado === 'aprobada' && (
             <>
-              <button onClick={() => registrarPago('banco')} disabled={aprobando}
+              <select value={cuentaSeleccionada} onChange={e => setCuentaSeleccionada(e.target.value)}
+                className="border border-gray-300 rounded-lg text-sm px-3 py-2">
+                <option value="">Cuenta de pago…</option>
+                {cuentasCaja.length > 0 && (
+                  <optgroup label="Caja">
+                    {cuentasCaja.map(c => (
+                      <option key={c.id} value={`caja:${c.id}`}>{c.nombre} ({c.moneda})</option>
+                    ))}
+                  </optgroup>
+                )}
+                {cuentasBanco.length > 0 && (
+                  <optgroup label="Banco">
+                    {cuentasBanco.map(c => (
+                      <option key={c.id} value={`banco:${c.id}`}>{c.nombre}{c.banco ? ` — ${c.banco}` : ''} ({c.moneda})</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              <button onClick={registrarPago} disabled={aprobando || !cuentaSeleccionada}
                 className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
-                <CheckCircle size={14} /> {aprobando ? 'Registrando…' : 'Pagar por banco'}
-              </button>
-              <button onClick={() => registrarPago('caja')} disabled={aprobando}
-                className="flex items-center gap-2 border border-green-600 text-green-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-50 disabled:opacity-50">
-                {aprobando ? 'Registrando…' : 'Pagar por caja'}
+                <CheckCircle size={14} /> {aprobando ? 'Registrando…' : 'Registrar pago'}
               </button>
             </>
           )}

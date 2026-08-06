@@ -18,6 +18,21 @@ export async function GET(request: NextRequest) {
 
   // Obtener empresa
   const empresaId = await getEmpresaIdActual(supabase, user.id);
+
+  // FIX auditoría 2026-08-04: este endpoint entrega ventas/compras agregadas
+  // (base para reportes DGI) sin verificar permiso — cualquier usuario
+  // autenticado podía llamarlo directamente. Se exige 'vet_ver', el mismo
+  // permiso que ya protege el módulo de cumplimiento.
+  if (empresaId) {
+    const { data: tienePermiso } = await supabase.rpc('fn_tiene_permiso', {
+      p_usuario_id: user.id,
+      p_empresa_id: empresaId,
+      p_permiso: 'vet_ver',
+    });
+    if (!tienePermiso) {
+      return NextResponse.json({ error: 'No tienes permiso para ver reportes DGI' }, { status: 403 });
+    }
+  }
   const [{ data: en }, { data: ej }] = empresaId ? await Promise.all([
     supabase.from("empresas_persona_natural").select("*").eq("id", empresaId).maybeSingle(),
     supabase.from("empresas_juridicas").select("*").eq("id", empresaId).maybeSingle(),
@@ -72,7 +87,7 @@ export async function GET(request: NextRequest) {
       .in("empresa_id", ids)
       .gte("fecha_compra", firstDay)
       .lte("fecha_compra", lastDay)
-      .eq("estado", "recibida")
+      .eq("estado", "registrada")
       .order("fecha_compra");
 
     const compras = (comprasData ?? []).map((c) => ({

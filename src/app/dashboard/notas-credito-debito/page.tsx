@@ -110,7 +110,7 @@ export default function NotasCreditoDebitoPage() {
       supabase.from('facturas').select('id,numero_factura,cliente_nombre,fecha_emision,total,subtotal,iva_total')
         .eq('empresa_id', eid).eq('estado', 'emitida').order('fecha_emision', { ascending: false }),
       supabase.from('compras').select('id,numero_compra,fecha_compra,total,subtotal,iva_total')
-        .eq('empresa_id', eid).in('estado', ['recibida','pagada']).order('fecha_compra', { ascending: false }),
+        .eq('empresa_id', eid).in('estado', ['registrada','pagada']).order('fecha_compra', { ascending: false }),
     ])
     setFacturas((facs as Factura[]) ?? [])
     setCompras((comps as Compra[]) ?? [])

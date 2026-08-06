@@ -65,6 +65,7 @@ function TabEmpresa({
 
   // Persona Natural
   const [nombreCompleto, setNombreCompleto] = useState(natural?.nombre_completo ?? "");
+  const [nombreComercialNat, setNombreComercialNat] = useState(natural?.nombre_comercial ?? "");
   const [cedula,         setCedula]         = useState(natural?.numero_cedula ?? "");
   const [rucNat,         setRucNat]         = useState(natural?.numero_ruc ?? "");
   const [direccion,      setDireccion]      = useState(natural?.direccion ?? "");
@@ -158,6 +159,7 @@ function TabEmpresa({
     } else {
       const { error } = await supabase.from("empresas_persona_natural").update({
         nombre_completo:    nombreCompleto,
+        nombre_comercial:   nombreComercialNat || null,
         numero_cedula:      cedula,
         numero_ruc:         rucNat,
         direccion,
@@ -215,6 +217,11 @@ function TabEmpresa({
             <label className="label">Nombre completo <span className="text-red-500">*</span></label>
             <input className="input" value={nombreCompleto} onChange={e => setNombreCompleto(e.target.value)}
               placeholder="Como aparece en la cédula" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="label">Nombre comercial <span className="text-slate-400 text-xs">(opcional)</span></label>
+            <input className="input" value={nombreComercialNat} onChange={e => setNombreComercialNat(e.target.value)}
+              placeholder="Ej. Pulpería Doña María" />
           </div>
           <div>
             <label className="label">Número de cédula <span className="text-red-500">*</span></label>

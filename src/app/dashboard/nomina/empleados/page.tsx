@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
+import { formatDate } from '@/lib/utils'
 import { Plus, Search, Edit, UserCheck, UserX } from 'lucide-react'
 
 interface Empleado {
@@ -144,7 +145,7 @@ export default function EmpleadosPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-500">
-                    {new Date(emp.fecha_ingreso).toLocaleDateString('es-NI')}
+                    {formatDate(emp.fecha_ingreso)}
                   </td>
                   <td className="px-4 py-3 text-center">
                     {emp.estado === 'activo' ? (

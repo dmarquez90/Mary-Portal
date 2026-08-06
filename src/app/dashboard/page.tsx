@@ -5,10 +5,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion, type Variants } from "framer-motion";
 import {
-  FileText, ShoppingCart, Package, Users, Truck, DollarSign, BarChart3,
+  FileText, Package, Users, Truck, DollarSign, BarChart3,
   Store, Landmark, Calculator, ClipboardList, BookText, BookOpen, TrendingUp,
   FileBarChart2, UserCheck, CalendarDays, Gift, Building2, CreditCard,
-  ShoppingBag, GitMerge, Lock, FileX, Banknote, ShieldCheck, UserCog, Settings,
+  ShoppingBag, GitMerge, Lock, FileX, Banknote, UserCog, Settings, Home,
 } from "lucide-react";
 import { usePermissionsSiconic } from "@/hooks/usePermissionsSiconic";
 
@@ -79,13 +79,12 @@ export default function DashboardPage() {
       titulo: "Operaciones",
       color: "blue",
       modulos: [
-        { href: "/dashboard/ventas",      icon: FileText,     label: "Ventas" },
-        { href: "/dashboard/compras",     icon: ShoppingCart, label: "Compras" },
+        { href: "/dashboard/ingreso-datos", icon: FileText,   label: "Ingreso de Datos" },
         { href: "/dashboard/clientes",    icon: Users,        label: "Clientes" },
         { href: "/dashboard/proveedores", icon: Truck,        label: "Proveedores" },
         { href: "/dashboard/inventario",  icon: Package,      label: "Inventario" },
         { href: "/dashboard/tasa-cambio", icon: DollarSign,   label: "Tasa de Cambio" },
-        { href: "/dashboard/reportes",    icon: BarChart3,    label: "Reportes" },
+        ...(can("vet_ver") ? [{ href: "/dashboard/reportes", icon: BarChart3, label: "Reportes DGI" }] : []),
         ...(can("pos_ver") ? [{ href: "/dashboard/pos", icon: Store, label: "Punto de Venta" }] : []),
         ...(can("caja_bancos_ver") ? [
           { href: "/dashboard/caja-bancos", icon: Landmark, label: "Caja y Bancos" },
@@ -123,9 +122,9 @@ export default function DashboardPage() {
         { href: "/dashboard/tributacion/ir-anual",      icon: FileText,      label: "IR Anual — F106" },
         { href: "/dashboard/tributacion/anticipos-ir",  icon: DollarSign,    label: "Anticipos IR" },
         { href: "/dashboard/tributacion/imi",           icon: Building2,     label: "IMI Municipal" },
+        { href: "/dashboard/tributacion/ibi",           icon: Home,          label: "IBI Municipal" },
         { href: "/dashboard/tributacion/isc",           icon: Banknote,      label: "ISC" },
         { href: "/dashboard/tributacion/retenciones",   icon: FileBarChart2, label: "Retenciones Definitivas" },
-        ...(can("vet_ver") ? [{ href: "/dashboard/vet", icon: ShieldCheck, label: "Cumplimiento VET" }] : []),
       ],
     },
     {

@@ -316,6 +316,11 @@ export async function crearAsientoPlanilla(
  * DÉBITO:  2.1.10 Sueldos y Salarios por Pagar = total_neto_pagar
  * CRÉDITO: 1.1.03 Banco Moneda Nacional         = total_neto_pagar
  *        ó 1.1.01 Caja General
+ *
+ * Además inserta el movimiento en movimientos_caja/transacciones_banco
+ * (según la cuenta específica elegida) para que el saldo_actual de esa
+ * cuenta y el módulo Caja y Bancos reflejen el pago — igual que ya hacen
+ * los triggers de facturas/compras (fn_contabilizar_factura/compra).
  */
 export async function crearAsientoPagoNomina(
   supabase: any,
@@ -327,13 +332,25 @@ export async function crearAsientoPagoNomina(
     fecha_pago:       string
     total_neto_pagar: number
     forma_pago:       'banco' | 'caja'
+    cuenta_caja_id?:  string
+    cuenta_banco_id?: string
   }
-) {
+): Promise<{ ok: true; asientoId: string | null } | { ok: false; error: string }> {
   // FIX auditoría: evitar doble asiento de pago
   const existente = await asientoExistente(
     supabase, empresaId, 'planilla', planilla.id, 'automatico_nomina_pago'
   )
-  if (existente) return existente
+  if (existente) {
+    // El asiento ya existe (reintento tras fallo previo). Verificar si el
+    // movimiento de caja/banco también quedó registrado; si no, completarlo.
+    const yaTieneMovimiento = planilla.forma_pago === 'caja'
+      ? await tieneMovimientoCaja(supabase, existente)
+      : await tieneMovimientoBanco(supabase, existente)
+    if (yaTieneMovimiento) return { ok: true, asientoId: existente }
+    const mov = await registrarMovimientoCajaBanco(supabase, empresaId, planilla, existente)
+    if (!mov.ok) return mov
+    return { ok: true, asientoId: existente }
+  }
 
   const ctaCreditoCod = planilla.forma_pago === 'banco' ? COD_NOMINA.BANCO_MN : COD_NOMINA.CAJA
   const codigos = [COD_NOMINA.SUELDOS_POR_PAGAR, ctaCreditoCod]
@@ -347,8 +364,7 @@ export async function crearAsientoPagoNomina(
   const ctaPago    = cuentas[ctaCreditoCod]
 
   if (!ctaSueldos || !ctaPago) {
-    console.error('Cuentas de pago de nómina no encontradas')
-    return null
+    return { ok: false, error: 'No se encontraron las cuentas contables de sueldos/caja-banco en el plan de cuentas' }
   }
 
   const lineas = [
@@ -366,7 +382,7 @@ export async function crearAsientoPagoNomina(
     },
   ]
 
-  return crearAsiento(supabase, empresaId, {
+  const asientoId = await crearAsiento(supabase, empresaId, {
     fecha:           planilla.fecha_pago,
     descripcion:     `Pago nómina — ${per}`,
     tipo:            'automatico_nomina_pago',
@@ -377,6 +393,98 @@ export async function crearAsientoPagoNomina(
     mes:             planilla.periodo_mes,
     lineas,
   })
+
+  if (!asientoId) {
+    return { ok: false, error: 'No se pudo generar el asiento contable del pago de nómina (revisar cuadre)' }
+  }
+
+  const mov = await registrarMovimientoCajaBanco(supabase, empresaId, planilla, asientoId)
+  if (!mov.ok) {
+    // El asiento contable quedó registrado pero el movimiento de caja/banco
+    // falló: anular el asiento para no dejar los libros descuadrados con
+    // Caja y Bancos (mismo criterio que la reversión de facturas/compras).
+    await supabase.from('asientos_contables').update({ estado: 'anulado' }).eq('id', asientoId)
+    return mov
+  }
+
+  return { ok: true, asientoId }
+}
+
+async function tieneMovimientoCaja(supabase: any, asientoId: string): Promise<boolean> {
+  const { data } = await supabase.from('movimientos_caja').select('id')
+    .eq('asiento_id', asientoId).eq('estado', 'registrado').limit(1).maybeSingle()
+  return !!data
+}
+
+async function tieneMovimientoBanco(supabase: any, asientoId: string): Promise<boolean> {
+  const { data } = await supabase.from('transacciones_banco').select('id')
+    .eq('asiento_id', asientoId).eq('estado', 'registrado').limit(1).maybeSingle()
+  return !!data
+}
+
+async function registrarMovimientoCajaBanco(
+  supabase: any,
+  empresaId: string,
+  planilla: {
+    periodo_mes: number; periodo_anio: number; fecha_pago: string
+    total_neto_pagar: number; forma_pago: 'banco' | 'caja'
+    cuenta_caja_id?: string; cuenta_banco_id?: string
+  },
+  asientoId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+  const per = `${meses[planilla.periodo_mes - 1]} ${planilla.periodo_anio}`
+
+  if (planilla.forma_pago === 'caja') {
+    if (!planilla.cuenta_caja_id) return { ok: false, error: 'No se indicó la cuenta de caja para el pago' }
+
+    const { data: caja } = await supabase.from('cuentas_caja')
+      .select('id, moneda').eq('id', planilla.cuenta_caja_id).eq('empresa_id', empresaId).maybeSingle()
+    if (!caja) return { ok: false, error: 'La cuenta de caja seleccionada no existe' }
+
+    const monto = await convertirMonto(supabase, empresaId, planilla.total_neto_pagar, caja.moneda, planilla.fecha_pago)
+    if (!monto.ok) return monto
+
+    const { error } = await supabase.from('movimientos_caja').insert({
+      empresa_id: empresaId, cuenta_caja_id: caja.id, tipo: 'egreso',
+      monto: monto.valor, descripcion: `Pago nómina ${per}`,
+      asiento_id: asientoId, fecha: planilla.fecha_pago,
+    })
+    if (error) return { ok: false, error: `No se pudo registrar el movimiento de caja: ${error.message}` }
+    return { ok: true }
+  }
+
+  if (!planilla.cuenta_banco_id) return { ok: false, error: 'No se indicó la cuenta bancaria para el pago' }
+
+  const { data: banco } = await supabase.from('cuentas_banco')
+    .select('id, moneda').eq('id', planilla.cuenta_banco_id).eq('empresa_id', empresaId).maybeSingle()
+  if (!banco) return { ok: false, error: 'La cuenta bancaria seleccionada no existe' }
+
+  const monto = await convertirMonto(supabase, empresaId, planilla.total_neto_pagar, banco.moneda, planilla.fecha_pago)
+  if (!monto.ok) return monto
+
+  const { error } = await supabase.from('transacciones_banco').insert({
+    empresa_id: empresaId, cuenta_banco_id: banco.id, tipo: 'pago',
+    monto: monto.valor, descripcion: `Pago nómina ${per}`,
+    asiento_id: asientoId, fecha: planilla.fecha_pago, direccion: 'salida',
+  })
+  if (error) return { ok: false, error: `No se pudo registrar la transacción bancaria: ${error.message}` }
+  return { ok: true }
+}
+
+// Convierte el neto a pagar (siempre calculado en córdobas) a la moneda de
+// la cuenta de caja/banco elegida, igual que fn_contabilizar_compra.
+async function convertirMonto(
+  supabase: any, empresaId: string, montoNIO: number, monedaCuenta: string, fecha: string
+): Promise<{ ok: true; valor: number } | { ok: false; error: string }> {
+  if (monedaCuenta !== 'USD') return { ok: true, valor: round2(montoNIO) }
+
+  const { data: tasa } = await supabase.rpc('fn_tasa_cambio_vigente', { p_empresa_id: empresaId, p_fecha: fecha })
+  if (!tasa || tasa <= 0) {
+    return { ok: false, error: 'No hay tasa de cambio registrada para convertir el pago a la cuenta en USD. Regístrala en Tasa de Cambio.' }
+  }
+  return { ok: true, valor: round2(montoNIO / tasa) }
 }
 
 // ─── Helper ──────────────────────────────────────────────────

@@ -1,0 +1,170 @@
+{
+  "name": "Conversion Divisas USD-EUR-NIO",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron Diario 8am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.exchangerate-api.com/v4/latest/USD",
+        "options": {}
+      },
+      "id": "http-usd",
+      "name": "GET Tasa USD",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, -80]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.exchangerate-api.com/v4/latest/EUR",
+        "options": {}
+      },
+      "id": "http-eur",
+      "name": "GET Tasa EUR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const usdData = $('GET Tasa USD').first().json;\nconst eurData = $('GET Tasa EUR').first().json;\n\nconst usdNio = usdData.rates.NIO;\nconst eurNio = eurData.rates.NIO;\n\nif (!usdNio || !eurNio) {\n  throw new Error('No se pudo obtener la tasa NIO desde la API de respaldo');\n}\n\nreturn [{\n  json: {\n    fecha: new Date().toISOString().slice(0, 10),\n    usd_nio: usdNio,\n    eur_nio: eurNio,\n    fuente: 'exchangerate-api'\n  }\n}];"
+      },
+      "id": "normalizar",
+      "name": "Normalizar Tasas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ERP_BASE_URL}}/api/tasas-cambio",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.N8N_TASA_CAMBIO_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "guardar-erp",
+      "name": "Guardar en ERP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "convertir-divisa",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook Conversion",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.ERP_BASE_URL}}/api/tasas-cambio",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "empresa_id",
+              "value": "={{$('Webhook Conversion').first().json.body.empresa_id}}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.N8N_TASA_CAMBIO_API_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "leer-tasa",
+      "name": "Leer Ultima Tasa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook Conversion').first().json.body;\nconst tasa = $('Leer Ultima Tasa').first().json;\n\nconst { monto, moneda_origen, moneda_destino } = body;\n\nif (!monto || !moneda_origen || !moneda_destino) {\n  throw new Error('Faltan campos: monto, moneda_origen, moneda_destino');\n}\n\nconst usdNio = tasa.usd_nio;\nconst eurNio = tasa.eur_nio;\n\nfunction convertir(monto, origen, destino) {\n  if (origen === destino) return monto;\n  const aNio = { USD: usdNio, EUR: eurNio, NIO: 1 };\n  if (!aNio[origen] || !aNio[destino]) {\n    throw new Error('Moneda no soportada: use USD, EUR o NIO');\n  }\n  const enNio = monto * aNio[origen];\n  return enNio / aNio[destino];\n}\n\nconst resultado = convertir(monto, moneda_origen, moneda_destino);\n\nreturn [{\n  json: {\n    monto_original: monto,\n    moneda_origen,\n    moneda_destino,\n    monto_convertido: Math.round(resultado * 10000) / 10000,\n    tasa_usd_nio: usdNio,\n    tasa_eur_nio: eurNio,\n    fecha_tasa: tasa.fecha\n  }\n}];"
+      },
+      "id": "calcular",
+      "name": "Calcular Conversion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "responder",
+      "name": "Responder Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [660, 300]
+    }
+  ],
+  "connections": {
+    "Cron Diario 8am": {
+      "main": [[{ "node": "GET Tasa USD", "type": "main", "index": 0 }, { "node": "GET Tasa EUR", "type": "main", "index": 0 }]]
+    },
+    "GET Tasa USD": {
+      "main": [[{ "node": "Normalizar Tasas", "type": "main", "index": 0 }]]
+    },
+    "GET Tasa EUR": {
+      "main": [[{ "node": "Normalizar Tasas", "type": "main", "index": 0 }]]
+    },
+    "Normalizar Tasas": {
+      "main": [[{ "node": "Guardar en ERP", "type": "main", "index": 0 }]]
+    },
+    "Webhook Conversion": {
+      "main": [[{ "node": "Leer Ultima Tasa", "type": "main", "index": 0 }]]
+    },
+    "Leer Ultima Tasa": {
+      "main": [[{ "node": "Calcular Conversion", "type": "main", "index": 0 }]]
+    },
+    "Calcular Conversion": {
+      "main": [[{ "node": "Responder Webhook", "type": "main", "index": 0 }]]
+    }
+  }
+}

@@ -10,6 +10,7 @@ interface Tasa {
   id: string;
   fecha: string;
   tasa: number;
+  tasa_eur: number | null;
   fuente: string;
   notas: string | null;
 }
@@ -24,10 +25,11 @@ export default function TasaCambioPage() {
   const [loadingBcn, setLoadingBcn] = useState(false);
 
   // Form fields
-  const [fecha,  setFecha]  = useState(new Date().toISOString().split("T")[0]);
-  const [tasa,   setTasa]   = useState("");
-  const [fuente, setFuente] = useState("BCN");
-  const [notas,  setNotas]  = useState("");
+  const [fecha,   setFecha]   = useState(new Date().toISOString().split("T")[0]);
+  const [tasa,    setTasa]    = useState("");
+  const [tasaEur, setTasaEur] = useState("");
+  const [fuente,  setFuente]  = useState("BCN");
+  const [notas,   setNotas]   = useState("");
 
   const loadData = useCallback(async () => {
     const { createClient } = await import("@/lib/supabase/client");
@@ -41,7 +43,7 @@ export default function TasaCambioPage() {
 
     const { data } = await supabase
       .from("tasa_cambio")
-      .select("id, fecha, tasa, fuente, notas")
+      .select("id, fecha, tasa, tasa_eur, fuente, notas")
       .eq("empresa_id", eId)
       .order("fecha", { ascending: false })
       .limit(90);
@@ -56,6 +58,7 @@ export default function TasaCambioPage() {
     setEditId(null);
     setFecha(new Date().toISOString().split("T")[0]);
     setTasa("");
+    setTasaEur("");
     setFuente("BCN");
     setNotas("");
     setShowForm(true);
@@ -65,6 +68,7 @@ export default function TasaCambioPage() {
     setEditId(t.id);
     setFecha(t.fecha);
     setTasa(String(t.tasa));
+    setTasaEur(t.tasa_eur != null ? String(t.tasa_eur) : "");
     setFuente(t.fuente);
     setNotas(t.notas ?? "");
     setShowForm(true);
@@ -105,6 +109,7 @@ export default function TasaCambioPage() {
       empresa_id: empresaId,
       fecha,
       tasa: Number(Number(tasa).toFixed(4)),
+      tasa_eur: tasaEur && Number(tasaEur) > 0 ? Number(Number(tasaEur).toFixed(4)) : null,
       fuente,
       notas: notas.trim() || null,
     };
@@ -144,7 +149,7 @@ export default function TasaCambioPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-900">Tasa de Cambio</h1>
-          <p className="text-slate-500 text-sm mt-1">Registro histórico de la tasa oficial USD → C$ (BCN)</p>
+          <p className="text-slate-500 text-sm mt-1">Registro histórico de tasas oficiales USD → C$ y EUR → C$ (BCN / automático)</p>
         </div>
         <button onClick={abrirNuevo} className="btn-primary flex items-center gap-2">
           <Plus className="w-4 h-4" /> Registrar tasa
@@ -153,27 +158,37 @@ export default function TasaCambioPage() {
 
       {/* ── Banner tasa vigente ── */}
       {tasaHoy && (
-        <div className="card mb-6 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 p-5">
-          <div className="flex items-center justify-between">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="card bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 p-5">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                 <DollarSign className="w-6 h-6 text-green-600" />
               </div>
               <div>
-                <p className="text-xs text-green-600 font-semibold uppercase tracking-wide">Tasa más reciente</p>
+                <p className="text-xs text-green-600 font-semibold uppercase tracking-wide">USD → C$ vigente</p>
                 <p className="font-display text-3xl font-bold text-green-800">
                   C$ {Number(tasaHoy.tasa).toFixed(4)}
                 </p>
                 <p className="text-sm text-green-600">
-                  1 USD = C${Number(tasaHoy.tasa).toFixed(4)} · {formatDate(tasaHoy.fecha)} · Fuente: {tasaHoy.fuente}
+                  {formatDate(tasaHoy.fecha)} · Fuente: {tasaHoy.fuente}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-green-500" />
-              <span className="text-green-600 text-sm font-medium">
-                {tasas.length} registro{tasas.length !== 1 ? "s" : ""}
-              </span>
+          </div>
+          <div className="card bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 p-5">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide">EUR → C$ vigente</p>
+                <p className="font-display text-3xl font-bold text-blue-800">
+                  {tasaHoy.tasa_eur ? `C$ ${Number(tasaHoy.tasa_eur).toFixed(4)}` : "Sin dato"}
+                </p>
+                <p className="text-sm text-blue-600">
+                  {tasas.length} registro{tasas.length !== 1 ? "s" : ""} en histórico
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -200,7 +215,8 @@ export default function TasaCambioPage() {
               <thead>
                 <tr className="border-b border-slate-100">
                   <th className="table-header">Fecha</th>
-                  <th className="table-header">Tasa (C$ por 1 USD)</th>
+                  <th className="table-header">C$ por 1 USD</th>
+                  <th className="table-header">C$ por 1 EUR</th>
                   <th className="table-header">Fuente</th>
                   <th className="table-header">Notas</th>
                   <th className="table-header">Acciones</th>
@@ -220,6 +236,11 @@ export default function TasaCambioPage() {
                     <td className="table-cell">
                       <span className="font-mono font-bold text-green-700">
                         C$ {Number(t.tasa).toFixed(4)}
+                      </span>
+                    </td>
+                    <td className="table-cell">
+                      <span className="font-mono font-bold text-blue-700">
+                        {t.tasa_eur ? `C$ ${Number(t.tasa_eur).toFixed(4)}` : "—"}
                       </span>
                     </td>
                     <td className="table-cell">
@@ -308,6 +329,23 @@ export default function TasaCambioPage() {
                 )}
               </div>
 
+              {/* Tasa EUR */}
+              <div>
+                <label className="label">Tasa EUR (C$ por 1 EUR, opcional)</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-sm">C$</span>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="0.0001"
+                    placeholder="39.8000"
+                    value={tasaEur}
+                    onChange={e => setTasaEur(e.target.value)}
+                    className="input pl-9 font-mono"
+                  />
+                </div>
+              </div>
+
               {/* Fuente */}
               <div>
                 <label className="label">Fuente</label>
@@ -317,6 +355,7 @@ export default function TasaCambioPage() {
                   <option value="BDF">BDF</option>
                   <option value="LAFISE">LAFISE</option>
                   <option value="manual">Manual</option>
+                  <option value="automatico">Automático (n8n)</option>
                 </select>
               </div>
 

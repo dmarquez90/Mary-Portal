@@ -1,6 +1,5 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { IVA_NICARAGUA } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -17,42 +16,26 @@ export function formatCurrency(amount: number): string {
 }
 
 // Formato fecha
+//
+// IMPORTANTE: las columnas tipo DATE de Postgres (sin hora) llegan como
+// "YYYY-MM-DD". `new Date("YYYY-MM-DD")` las interpreta como medianoche UTC;
+// al formatearlas en una zona horaria detrás de UTC (Nicaragua es UTC-6),
+// JavaScript retrocede al día anterior. Por eso se parsean los componentes
+// año/mes/día directamente y se construye la fecha en hora LOCAL, sin pasar
+// por ninguna conversión de zona horaria. Ver hallazgo #5 del reporte de QA
+// (2026-08-05): esto estaba mostrando fechas de nómina, compras y ventas un
+// día antes de la fecha real guardada en la base de datos.
 export function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("es-NI", {
+  if (!dateStr) return "";
+  const soloFecha = dateStr.split("T")[0];
+  const [year, month, day] = soloFecha.split("-").map(Number);
+  if (!year || !month || !day) return dateStr;
+  const fecha = new Date(year, month - 1, day);
+  return fecha.toLocaleDateString("es-NI", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
-}
-
-// Calcular IVA
-export function calcularIVA(subtotal: number, aplicaIVA: boolean): number {
-  if (!aplicaIVA) return 0;
-  return subtotal * IVA_NICARAGUA;
-}
-
-// Validar RUC Nicaragua (formato básico)
-export function validarRUC(ruc: string): boolean {
-  // RUC persona natural: 14 dígitos
-  // RUC persona jurídica: 14 dígitos
-  return /^\d{14}$/.test(ruc.replace(/-/g, ""));
-}
-
-// Validar cédula Nicaragua: 001-000000-0000X
-export function validarCedula(cedula: string): boolean {
-  return /^\d{3}-\d{6}-\d{4}[A-Z]$/.test(cedula);
-}
-
-// Generar número de factura
-export function generarNumeroFactura(ultimo: number, prefijo = "F"): string {
-  return `${prefijo}-${String(ultimo + 1).padStart(6, "0")}`;
-}
-
-// Formatear RUC con guiones
-export function formatearRUC(ruc: string): string {
-  const limpio = ruc.replace(/\D/g, "");
-  if (limpio.length !== 14) return ruc;
-  return `${limpio.slice(0, 3)}-${limpio.slice(3, 9)}-${limpio.slice(9)}`;
 }
 
 // Mes en español

@@ -21,6 +21,7 @@ export default function EmpresaForm({ empresaNatural, empresaJuridica, userId }:
 
   // Persona Natural
   const [nombreCompleto, setNombreCompleto] = useState(empresaNatural?.nombre_completo ?? "");
+  const [nombreComercialNat, setNombreComercialNat] = useState(empresaNatural?.nombre_comercial ?? "");
   const [cedula, setCedula] = useState(empresaNatural?.numero_cedula ?? "");
   const [rucNatural, setRucNatural] = useState(empresaNatural?.numero_ruc ?? "");
   const [direccion, setDireccion] = useState(empresaNatural?.direccion ?? "");
@@ -55,6 +56,7 @@ export default function EmpresaForm({ empresaNatural, empresaJuridica, userId }:
     } else if (empresa) {
       const { error } = await supabase.from("empresas_persona_natural").update({
         nombre_completo: nombreCompleto,
+        nombre_comercial: nombreComercialNat || null,
         numero_cedula: cedula,
         numero_ruc: rucNatural,
         direccion,
@@ -104,6 +106,10 @@ export default function EmpresaForm({ empresaNatural, empresaJuridica, userId }:
             <div className="md:col-span-2">
               <label className="label">Nombre completo</label>
               <input className="input" value={nombreCompleto} onChange={e => setNombreCompleto(e.target.value)} />
+            </div>
+            <div className="md:col-span-2">
+              <label className="label">Nombre comercial <span className="text-slate-400 text-xs">(opcional)</span></label>
+              <input className="input" placeholder="Ej. Pulpería Doña María" value={nombreComercialNat} onChange={e => setNombreComercialNat(e.target.value)} />
             </div>
             <div>
               <label className="label">Cédula</label>

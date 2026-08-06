@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import EditarDatosProveedorModal from "@/components/compras/EditarDatosProveedorModal";
 
 const BADGE: Record<string, string> = {
-  recibida: "badge-info", pagada: "badge-success", borrador: "badge-gray", anulada: "badge-danger",
+  registrada: "badge-info", pagada: "badge-success", borrador: "badge-gray", anulada: "badge-danger",
 };
 
 interface Compra {
@@ -97,7 +97,7 @@ export default function ComprasPage() {
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
 
-    if (c.estado === "recibida") {
+    if (c.estado === "registrada") {
       const { data: detalles } = await supabase
         .from("detalle_compras")
         .select("producto_id, cantidad")
@@ -113,7 +113,7 @@ export default function ComprasPage() {
     }
 
     await supabase.from("compras").update({ estado: "anulada" }).eq("id", c.id);
-    toast.success(`Compra ${c.numero_compra} anulada${c.estado === "recibida" ? " — stock revertido" : ""}`);
+    toast.success(`Compra ${c.numero_compra} anulada${c.estado === "registrada" ? " — stock revertido" : ""}`);
     setConfirmDel(null);
     loadData();
   }
@@ -136,7 +136,7 @@ export default function ComprasPage() {
               <span className="text-xs text-green-500">· {formatDate(tasaHoy.fecha)}</span>
             </div>
           )}
-          <Link href="/dashboard/compras/nueva" className="btn-primary flex items-center gap-2">
+          <Link href="/dashboard/ingreso-datos/compra" className="btn-primary flex items-center gap-2">
             <Plus className="w-4 h-4" /> Nueva compra
           </Link>
         </div>
@@ -202,7 +202,7 @@ export default function ComprasPage() {
             >
               <option value="">Todos los estados</option>
               <option value="borrador">Borrador</option>
-              <option value="recibida">Recibida</option>
+              <option value="registrada">Registrada</option>
               <option value="pagada">Pagada</option>
               <option value="anulada">Anulada</option>
             </select>
@@ -239,7 +239,7 @@ export default function ComprasPage() {
               {hayFiltros ? "No hay compras con esos filtros" : "No hay compras registradas"}
             </p>
             {!hayFiltros && (
-              <Link href="/dashboard/compras/nueva" className="btn-primary inline-flex items-center gap-2 mt-4">
+              <Link href="/dashboard/ingreso-datos/compra" className="btn-primary inline-flex items-center gap-2 mt-4">
                 <Plus className="w-4 h-4" /> Registrar compra
               </Link>
             )}
@@ -330,9 +330,9 @@ export default function ComprasPage() {
             <p className="text-slate-500 text-sm mb-2">
               Compra <strong>{confirmDel.numero_compra}</strong>
             </p>
-            {confirmDel.estado === "recibida" && (
+            {confirmDel.estado === "registrada" && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800 text-xs mb-4">
-                ⚠️ Esta compra ya fue recibida. Al anularla se <strong>revertirá el stock</strong> del inventario.
+                ⚠️ Esta compra ya fue registrada. Al anularla se <strong>revertirá el stock</strong> del inventario.
               </div>
             )}
             <div className="flex gap-3">

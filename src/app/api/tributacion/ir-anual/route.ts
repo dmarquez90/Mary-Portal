@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
           .from('compras')
           .select('subtotal')
           .eq('empresa_id', empresa_id)
-          .in('estado', ['recibida', 'pagada'])
+          .in('estado', ['registrada', 'pagada'])
           .gte('fecha_compra', fechaInicio)
           .lte('fecha_compra', fechaFin)
         costo_ventas = compras?.reduce((s, c) => s + Number(c.subtotal ?? 0), 0) ?? 0

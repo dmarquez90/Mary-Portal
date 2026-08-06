@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getEmpresaIdActual } from '@/lib/supabase/empresa-actual'
+import { formatDate } from '@/lib/utils'
 import { ArrowLeft, Save, UserX, UserCheck, History } from 'lucide-react'
 import ComboCargo from '@/components/nomina/ComboCargo'
 
@@ -485,7 +486,7 @@ export default function EditarEmpleadoPage() {
                   return (
                     <tr key={h.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-600">
-                        {new Date(h.fecha_cambio).toLocaleDateString('es-NI')}
+                        {formatDate(h.fecha_cambio)}
                       </td>
                       <td className="px-4 py-3 text-right text-gray-500">
                         {fmt(Number(h.salario_anterior))}

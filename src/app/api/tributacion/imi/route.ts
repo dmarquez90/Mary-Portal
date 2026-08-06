@@ -39,15 +39,18 @@ export async function POST(req: NextRequest) {
     const diasMes = new Date(anio, mes, 0).getDate()
     const fechaFin = `${anio}-${String(mes).padStart(2, '0')}-${diasMes}`
 
+    // Base gravable del IMI = ingresos brutos (ventas), sin IVA.
+    // `total` de la factura incluye iva_total, por lo que no sirve como base;
+    // se usa subtotal - descuento_total (el IVA es un pasivo con la DGI, no ingreso).
     const { data: facturas } = await supabase
       .from('facturas')
-      .select('total')
+      .select('subtotal, descuento_total')
       .eq('empresa_id', empresa_id)
       .in('estado', ['pagada', 'emitida'])
       .gte('fecha_emision', fechaInicio)
       .lte('fecha_emision', fechaFin)
 
-    ingresos = facturas?.reduce((s, f) => s + (f.total ?? 0), 0) ?? 0
+    ingresos = facturas?.reduce((s, f) => s + ((f.subtotal ?? 0) - (f.descuento_total ?? 0)), 0) ?? 0
   }
 
   const tasa = 0.01

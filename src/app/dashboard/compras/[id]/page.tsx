@@ -44,7 +44,7 @@ interface Compra {
 }
 
 const BADGE: Record<string, string> = {
-  recibida: "badge-info", pagada: "badge-success", borrador: "badge-gray", anulada: "badge-danger",
+  registrada: "badge-info", pagada: "badge-success", borrador: "badge-gray", anulada: "badge-danger",
 };
 
 const TIPO_PAGO_LABEL: Record<string, string> = {
@@ -86,8 +86,8 @@ export default function CompraDetallePage() {
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
 
-    // Si estaba recibida, revertir stock
-    if (compra?.estado === "recibida") {
+    // Si estaba registrada, revertir stock
+    if (compra?.estado === "registrada") {
       const { data: detalles } = await supabase
         .from("detalle_compras").select("producto_id, cantidad")
         .eq("compra_id", compra.id);
@@ -102,7 +102,7 @@ export default function CompraDetallePage() {
     }
 
     await supabase.from("compras").update({ estado: "anulada" }).eq("id", compra!.id);
-    toast.success("Compra anulada" + (compra?.estado === "recibida" ? " — stock revertido" : ""));
+    toast.success("Compra anulada" + (compra?.estado === "registrada" ? " — stock revertido" : ""));
     setConfirmDel(false);
     router.push("/dashboard/compras");
   }
@@ -452,9 +452,9 @@ ${compra.notas ? `<div class="bloque"><div class="lbl">NOTA:</div><div>${compra.
             </div>
             <h3 className="font-display font-bold text-slate-900 mb-2">¿Anular compra?</h3>
             <p className="text-slate-500 text-sm mb-2">{compra.numero_compra}</p>
-            {compra.estado === "recibida" && (
+            {compra.estado === "registrada" && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800 text-xs mb-4">
-                ⚠️ Esta compra fue recibida. Al anularla se <strong>revertirá el stock</strong> del inventario.
+                ⚠️ Esta compra fue registrada. Al anularla se <strong>revertirá el stock</strong> del inventario.
               </div>
             )}
             <div className="flex gap-3">

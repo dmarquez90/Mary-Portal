@@ -37,6 +37,7 @@ export default function RegisterPage() {
 
   // ── Persona Natural / Cuota Fija ────────────────────
   const [nombreCompleto, setNombreCompleto] = useState("");
+  const [nombreComercialPN, setNombreComercialPN] = useState("");
   const [numeroCedula,   setNumeroCedula]   = useState("");
   const [numeroRuc,      setNumeroRuc]      = useState("");
   const [direccion,      setDireccion]      = useState("");
@@ -106,9 +107,12 @@ export default function RegisterPage() {
 
     const userId = authData.user.id;
 
-    // El régimen tributario determina qué reportes VET aplican a la empresa
-    // (ver /api/vet/[empresa_id]/reportes) — sin esto el módulo VET no funciona.
-    // "Cuota Fija" mapea a régimen Simplificado; el resto arranca en General
+    // El régimen tributario queda registrado en la empresa (tabla
+    // regimenes_tributarios) para uso futuro — hoy /dashboard/reportes no
+    // filtra por régimen todavía (pendiente: Cuota Fija/Simplificado no
+    // debería ver los reportes DGI de régimen General, ver memoria de
+    // pendientes fiscales, punto C). "Cuota Fija" mapea a régimen
+    // Simplificado; el resto arranca en General
     // (el régimen Especial, para exportadores/zona franca, se asigna después
     // desde Configuración, ya que el registro no distingue ese caso).
     const nombreRegimen = tipoEmpresa === "cuota_fija" ? "Simplificado" : "General";
@@ -162,6 +166,7 @@ export default function RegisterPage() {
         user_id:            userId,
         tipo_empresa:       tipoEmpresa,
         nombre_completo:    nombreCompleto,
+        nombre_comercial:   nombreComercialPN || null,
         numero_cedula:      numeroCedula,
         numero_ruc:         numeroRuc.replace(/\D/g, ""),
         direccion,
@@ -239,6 +244,11 @@ export default function RegisterPage() {
                 <label className="label">Nombre completo <span className="text-red-500">*</span></label>
                 <input type="text" className="input" placeholder="Juan Carlos López Martínez"
                   value={nombreCompleto} onChange={e => setNombreCompleto(e.target.value)} required />
+              </div>
+              <div className="md:col-span-2">
+                <label className="label">Nombre comercial <span className="text-slate-400 text-xs">(opcional)</span></label>
+                <input type="text" className="input" placeholder="Ej. Pulpería Doña María"
+                  value={nombreComercialPN} onChange={e => setNombreComercialPN(e.target.value)} />
               </div>
               <div>
                 <label className="label">Número de cédula <span className="text-red-500">*</span></label>

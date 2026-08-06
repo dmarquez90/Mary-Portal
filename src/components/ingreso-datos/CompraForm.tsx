@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, ArrowLeft, Search, X, PackagePlus, FileText, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, Search, X, PackagePlus, FileText, AlertCircle, UserPlus, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { IVA_NICARAGUA } from "@/types";
@@ -26,10 +26,13 @@ const PROD_FORM_VACIO = {
   precio_venta: 0, aplica_iva: true, stock_minimo: 0,
 };
 
-export default function EditarCompraPage() {
+const PROV_FORM_VACIO = {
+  nombre: "", tipo_persona: "juridica" as string, ruc: "",
+  contacto: "", telefono: "", correo: "", direccion: "",
+};
+
+export default function CompraForm() {
   const router = useRouter();
-  const params = useParams();
-  const compraId = Array.isArray(params.id) ? params.id[0] : (params.id ?? "");
 
   const [saving,      setSaving]     = useState(false);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -38,21 +41,19 @@ export default function EditarCompraPage() {
 
   const [proveedorId,          setProveedorId]          = useState("");
   const [proveedorTipo,        setProveedorTipo]         = useState<string>("juridica");
-  const [retencionCodigo,      setRetencionCodigo]       = useState("");
-  const [iscCompra,            setIscCompra]             = useState("");
+  const [retencionCodigo,      setRetencionCodigo]      = useState("");
+  const [iscCompra,            setIscCompra]            = useState("");
   const [fechaCompra,          setFechaCompra]          = useState(new Date().toISOString().split("T")[0]);
   const [tipoPago,             setTipoPago]             = useState("contado");
   const [notas,                setNotas]                = useState("");
   const [lineas,               setLineas]               = useState<Linea[]>([lineaVacia()]);
   const [numFacturaProveedor,  setNumFacturaProveedor]  = useState("");
 
-  // ── NUEVO: cuentas banco/caja disponibles + selección ────────
   const [cuentasBanco,    setCuentasBanco]    = useState<CuentaBanco[]>([]);
   const [cuentasCaja,     setCuentasCaja]     = useState<CuentaCaja[]>([]);
   const [cuentaBancoId,   setCuentaBancoId]   = useState("");
   const [cuentaCajaId,    setCuentaCajaId]    = useState("");
   const [tasaCambio,      setTasaCambio]      = useState("");
-  const [estadoOriginal,  setEstadoOriginal]  = useState("borrador");
 
   const [busquedas,       setBusquedas]       = useState<string[]>([""]);
   const [mostrarDropdown, setMostrarDropdown] = useState<number | null>(null);
@@ -61,6 +62,12 @@ export default function EditarCompraPage() {
   const [lineaParaNuevo, setLineaParaNuevo] = useState<number | null>(null);
   const [prodForm,       setProdForm]       = useState({ ...PROD_FORM_VACIO });
   const [creandoProd,    setCreandoProd]    = useState(false);
+
+  const [busquedaProv,      setBusquedaProv]      = useState("");
+  const [mostrarDropdownProv, setMostrarDropdownProv] = useState(false);
+  const [showNuevoProv,     setShowNuevoProv]     = useState(false);
+  const [provForm,          setProvForm]          = useState({ ...PROV_FORM_VACIO });
+  const [creandoProv,       setCreandoProv]       = useState(false);
 
   function lineaVacia(): Linea {
     return { producto_id: "", descripcion: "", cantidad: 1, precio_unitario: 0, aplica_iva: true };
@@ -77,35 +84,6 @@ export default function EditarCompraPage() {
       const eId = await getEmpresaIdActual(supabase, user.id) ?? "";
       setEmpresaId(eId);
 
-      // ── Cargar compra borrador para editar ─────────────────
-      const { data: compra } = await supabase
-        .from("compras")
-        .select("*, detalle_compras(*)")
-        .eq("id", compraId)
-        .maybeSingle();
-      if (compra) {
-        setProveedorId(compra.proveedor_id ?? "");
-        setFechaCompra(compra.fecha_compra ?? new Date().toISOString().split("T")[0]);
-        setTipoPago(compra.tipo_pago ?? "contado");
-        setNotas(compra.notas ?? "");
-        setCuentaBancoId(compra.cuenta_banco_id ?? "");
-        setCuentaCajaId(compra.cuenta_caja_id ?? "");
-        setEstadoOriginal(compra.estado ?? "borrador");
-        // Retención guardada (legacy sin código pero con monto = 22 general)
-        setRetencionCodigo(compra.retencion_codigo ?? (Number(compra.retencion_ir) > 0 ? "22" : ""));
-        setIscCompra(Number(compra.isc_total) > 0 ? String(compra.isc_total) : "");
-        if (compra.detalle_compras?.length) {
-          setLineas(compra.detalle_compras.map((d: any) => ({
-            producto_id: d.producto_id ?? "",
-            descripcion: d.descripcion,
-            cantidad: Number(d.cantidad),
-            precio_unitario: Number(d.precio_unitario),
-            aplica_iva: Number(d.iva) > 0,
-          })));
-          setBusquedas(compra.detalle_compras.map((d: any) => d.descripcion ?? ""));
-        }
-      }
-
       if (eId) {
         const [
           { data: prov }, { data: prod },
@@ -120,27 +98,21 @@ export default function EditarCompraPage() {
         setProductos((prod as Producto[]) ?? []);
         setCuentasBanco((bancos as CuentaBanco[]) ?? []);
         setCuentasCaja((cajas as CuentaCaja[]) ?? []);
-        // Preseleccionar la primera cuenta disponible
-        if (bancos && bancos.length > 0) setCuentaBancoId(bancos[0].id);
-        if (cajas  && cajas.length  > 0) setCuentaCajaId(cajas[0].id);
+        const bancoNio = bancos?.find(b => b.moneda === "NIO") ?? bancos?.[0];
+        if (bancoNio) setCuentaBancoId(bancoNio.id);
+        if (cajas && cajas.length > 0) setCuentaCajaId(cajas[0].id);
       }
     }
     load();
   }, []);
 
-  // Actualizar tipo_persona cuando cambia el proveedor
   useEffect(() => {
-    if (!proveedorId) { setProveedorTipo("juridica"); return; }
+    if (!proveedorId) { setProveedorTipo("juridica"); setRetencionCodigo(""); return; }
     const prov = proveedores.find(p => p.id === proveedorId);
-    setProveedorTipo(prov?.tipo_persona ?? "juridica");
+    const tipo = prov?.tipo_persona ?? "juridica";
+    setProveedorTipo(tipo);
+    setRetencionCodigo(tipo === "natural" ? "22" : "");
   }, [proveedorId, proveedores]);
-
-  // Una vez que la compra ya fue contabilizada (estado ≠ borrador), el
-  // motor contable ya generó su asiento y su movimiento de caja/banco.
-  // Cambiar la cuenta de pago o el tipo de pago después de eso no vuelve
-  // a disparar esa contabilización (el trigger solo corre una vez por
-  // compra), así que se bloquea para no desincronizar los datos.
-  const bloqueadoPago = estadoOriginal !== "borrador";
 
   const monedaCuentaPago = tipoPago === "contado"
     ? cuentasCaja.find(c => c.id === cuentaCajaId)?.moneda
@@ -150,7 +122,7 @@ export default function EditarCompraPage() {
   const cuentaPagoEsUSD = monedaCuentaPago === "USD";
 
   useEffect(() => {
-    if (bloqueadoPago || !cuentaPagoEsUSD || !empresaId) { return; }
+    if (!cuentaPagoEsUSD || !empresaId) { setTasaCambio(""); return; }
     (async () => {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -158,7 +130,7 @@ export default function EditarCompraPage() {
       if (data) setTasaCambio(String(data));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cuentaPagoEsUSD, empresaId, bloqueadoPago]);
+  }, [cuentaPagoEsUSD, empresaId]);
 
   function productosFiltrados(idx: number) {
     const b = busquedas[idx]?.toLowerCase() ?? "";
@@ -241,6 +213,71 @@ export default function EditarCompraPage() {
     setLineaParaNuevo(null);
   }
 
+  function proveedoresFiltrados() {
+    const b = busquedaProv.toLowerCase();
+    if (!b) return proveedores;
+    return proveedores.filter(p =>
+      p.nombre.toLowerCase().includes(b) ||
+      (p.ruc ?? "").toLowerCase().includes(b)
+    );
+  }
+
+  function sinResultadosProv() {
+    return busquedaProv.length >= 2 && proveedoresFiltrados().length === 0;
+  }
+
+  function seleccionarProveedor(prov: Proveedor) {
+    setProveedorId(prov.id);
+    setBusquedaProv(prov.nombre);
+    setMostrarDropdownProv(false);
+  }
+
+  function quitarProveedor() {
+    setProveedorId("");
+    setBusquedaProv("");
+  }
+
+  function abrirNuevoProveedor() {
+    setProvForm({ ...PROV_FORM_VACIO, nombre: busquedaProv });
+    setShowNuevoProv(true);
+    setMostrarDropdownProv(false);
+  }
+
+  async function handleCrearProveedor() {
+    if (!provForm.nombre.trim()) { toast.error("El nombre del proveedor es obligatorio."); return; }
+    if (!empresaId)              { toast.error("No se encontró la empresa."); return; }
+
+    setCreandoProv(true);
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+
+    const { data: nuevo, error } = await supabase.from("proveedores").insert({
+      empresa_id:   empresaId,
+      nombre:       provForm.nombre.trim(),
+      tipo_persona: provForm.tipo_persona,
+      ruc:          provForm.ruc || null,
+      contacto:     provForm.contacto || null,
+      telefono:     provForm.telefono || null,
+      correo:       provForm.correo || null,
+      direccion:    provForm.direccion || null,
+      activo:       true,
+    }).select().single();
+
+    if (error || !nuevo) {
+      toast.error(`Error al crear el proveedor: ${error?.message}`);
+      setCreandoProv(false);
+      return;
+    }
+
+    const provNuevo = nuevo as Proveedor;
+    setProveedores(prev => [...prev, provNuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    seleccionarProveedor(provNuevo);
+
+    toast.success(`Proveedor "${provNuevo.nombre}" creado`);
+    setShowNuevoProv(false);
+    setCreandoProv(false);
+  }
+
   function updateLinea(idx: number, key: keyof Linea, val: string | number | boolean) {
     setLineas(prev => prev.map((l, i) => i === idx ? { ...l, [key]: val } : l));
   }
@@ -265,10 +302,6 @@ export default function EditarCompraPage() {
   const subtotal    = lineas.reduce((s, l) => s + calcLinea(l).sub, 0);
   const ivaTotal    = lineas.reduce((s, l) => s + calcLinea(l).iva, 0);
   const total       = subtotal + ivaTotal;
-  // ── Retención IR según el código del catálogo DGI seleccionado ──
-  // FIX auditoría: se aplica el umbral legal (Art. 44 num. 2.2 Regl. LCT):
-  // la retención 2% sobre bienes y servicios en general solo aplica a
-  // operaciones mayores a C$1,000 (calcularRetencion devuelve 0 debajo).
   const retencionSel = getCodigoRetencion(retencionCodigo);
   const retencionIR  = calcularRetencion(retencionCodigo, subtotal);
   const totalPagar   = total - retencionIR;
@@ -282,17 +315,29 @@ export default function EditarCompraPage() {
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
 
-    // ── MODO EDICIÓN: actualizar compra existente ─────────────
+    const { data: cons } = await supabase.from("consecutivos").select("*").eq("empresa_id", empresaId).eq("tipo", "compra").single();
+    let numeroCompra = "C-000001";
+    if (cons) {
+      const nuevo = cons.ultimo + 1;
+      const digitos = cons.digitos ?? 6;
+      numeroCompra = `${cons.prefijo ?? "C"}-${String(nuevo).padStart(digitos, "0")}`;
+      await supabase.from("consecutivos").update({ ultimo: nuevo }).eq("id", cons.id);
+    } else {
+      await supabase.from("consecutivos").insert({ empresa_id: empresaId, tipo: "compra", ultimo: 1, prefijo: "C", digitos: 6 });
+    }
+
     const cuentaBancoFinal = tipoPago !== "contado" && tipoPago !== "credito" ? (cuentaBancoId || null) : null;
     const cuentaCajaFinal  = tipoPago === "contado" ? (cuentaCajaId || null) : null;
 
-    if (!bloqueadoPago && cuentaPagoEsUSD && (!tasaCambio || Number(tasaCambio) <= 0)) {
+    if (cuentaPagoEsUSD && (!tasaCambio || Number(tasaCambio) <= 0)) {
       toast.error("Ingresa la tasa de cambio para pagar desde una cuenta en dólares.");
       setSaving(false);
       return;
     }
 
-    const { data: compra, error } = await supabase.from("compras").update({
+    const { data: compra, error } = await supabase.from("compras").insert({
+      empresa_id:     empresaId,
+      numero_compra:  numeroCompra,
       proveedor_id:   proveedorId || null,
       fecha_compra:   fechaCompra,
       tipo_pago:      tipoPago,
@@ -306,48 +351,39 @@ export default function EditarCompraPage() {
       total_a_pagar:  totalPagar,
       cuenta_banco_id: cuentaBancoFinal,
       cuenta_caja_id:  cuentaCajaFinal,
-      ...(bloqueadoPago ? {} : { tasa_cambio: cuentaPagoEsUSD ? Number(tasaCambio) : null }),
-      notas: [notas, numFacturaProveedor ? `Factura proveedor: ${numFacturaProveedor}` : ""].filter(Boolean).join(" | ") || null,
-    }).eq("id", compraId).select().single();
+      tasa_cambio:    cuentaPagoEsUSD ? Number(tasaCambio) : null,
+      notas: notas || null,
+      numero_factura_proveedor: numFacturaProveedor || null,
+    }).select().single();
 
     if (error || !compra) { toast.error(`Error al guardar: ${error?.message}`); setSaving(false); return; }
-
-    // Borrar detalles anteriores y reinsertar
-    await supabase.from("detalle_compras").delete().eq("compra_id", compraId);
 
     const { error: detError } = await supabase.from("detalle_compras").insert(
       lineas.map(l => {
         const { sub, iva, total: tot } = calcLinea(l);
         return {
-          compra_id: compraId,
+          compra_id: compra.id,
           producto_id: l.producto_id || null,
           descripcion: l.descripcion,
           cantidad: l.cantidad,
           precio_unitario: l.precio_unitario,
           iva,
           total: tot,
-          // subtotal es columna generada (GENERATED ALWAYS), no enviar
         };
       })
     );
 
     if (detError) {
-      // Si "estado" quedó en 'registrada' arriba, el UPDATE de la cabecera ya
-      // disparó fn_contabilizar_compra (asiento aprobado). Si el detalle
-      // falla, anular la compra para revertir asiento/caja/banco/stock en
-      // vez de dejarla a medias (mismo hallazgo CRÍTICO 1B del reporte QA).
       await supabase.from("compras").update({
         estado: "anulada",
         notas: `${notas ? notas + " — " : ""}Auto-anulada: fallo al guardar el detalle (${detError.message})`,
-      }).eq("id", compraId);
+      }).eq("id", compra.id);
 
       toast.error(`Error al guardar los artículos: ${detError.message}`, { duration: 8000 });
       setSaving(false);
       return;
     }
 
-    // El trigger fn_mover_stock_entrada_compra / fn_stock_cambio_estado_compra
-    // ya maneja stock automáticamente. Solo insertar lotes_inventario si registrada.
     if (estado === "registrada") {
       for (const l of lineas) {
         if (!l.producto_id || l.cantidad <= 0) continue;
@@ -363,15 +399,14 @@ export default function EditarCompraPage() {
       }
     }
 
-    toast.success(`Compra ${compra.numero_compra} ${estado === "registrada" ? "registrada — inventario actualizado" : "guardada como borrador"}`);
+    toast.success(`Compra ${numeroCompra} ${estado === "registrada" ? "registrada — inventario actualizado" : "guardada como borrador"}`);
     router.push("/dashboard/compras");
   }
 
-  // ── RENDER ──────────────────────────────────────────────────
   return (
     <div>
       <div className="flex items-center gap-3 mb-8">
-        <Link href="/dashboard/compras" className="btn-ghost p-2"><ArrowLeft className="w-5 h-5" /></Link>
+        <Link href="/dashboard/ingreso-datos" className="btn-ghost p-2"><ArrowLeft className="w-5 h-5" /></Link>
         <div>
           <h1 className="font-display text-2xl font-bold text-slate-900">Nueva Compra</h1>
           <p className="text-slate-500 text-sm mt-1">Si el producto no existe en tu inventario, puedes crearlo al momento</p>
@@ -381,20 +416,62 @@ export default function EditarCompraPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-5">
 
-          {/* Datos generales */}
           <div className="card">
             <h2 className="font-semibold text-slate-900 mb-4">Datos de la compra</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div className="relative">
                 <label className="label">Proveedor</label>
-                <select className="input" value={proveedorId} onChange={e => setProveedorId(e.target.value)}>
-                  <option value="">Sin proveedor</option>
-                  {proveedores.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}{p.tipo_persona === "natural" ? " (Natural)" : ""}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    className="input pl-8 pr-8"
+                    placeholder="Buscar proveedor... (o dejar vacío)"
+                    value={busquedaProv}
+                    onChange={e => {
+                      setBusquedaProv(e.target.value);
+                      if (!e.target.value) setProveedorId("");
+                      setMostrarDropdownProv(true);
+                    }}
+                    onFocus={() => setMostrarDropdownProv(true)}
+                    onBlur={() => setTimeout(() => setMostrarDropdownProv(false), 150)}
+                  />
+                  {busquedaProv && (
+                    <button type="button" onClick={quitarProveedor}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                {mostrarDropdownProv && (
+                  <div className="absolute z-20 w-full bg-white border border-slate-200 rounded-xl shadow-lg mt-1 max-h-52 overflow-y-auto">
+                    {proveedoresFiltrados().map(prov => (
+                      <button
+                        key={prov.id}
+                        type="button"
+                        className="w-full text-left px-4 py-2.5 hover:bg-brand-50 text-sm"
+                        onMouseDown={() => seleccionarProveedor(prov)}
+                      >
+                        <span className="font-medium">{prov.nombre}</span>
+                        {prov.tipo_persona === "natural" && <span className="text-amber-600 text-xs ml-2">Natural</span>}
+                        {prov.ruc && <span className="text-slate-400 text-xs ml-2">{prov.ruc}</span>}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="w-full text-left px-4 py-3 hover:bg-brand-50 flex items-start gap-3 border-t border-slate-100"
+                      onMouseDown={abrirNuevoProveedor}
+                    >
+                      <UserPlus className="w-5 h-5 text-brand-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-brand-700">
+                          {sinResultadosProv() ? `+ Crear "${busquedaProv}" como nuevo proveedor` : "+ Crear nuevo proveedor"}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">No existe en tu lista. Se creará automáticamente.</p>
+                      </div>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -416,25 +493,19 @@ export default function EditarCompraPage() {
 
               <div>
                 <label className="label">Tipo de pago</label>
-                <select className="input" value={tipoPago} disabled={bloqueadoPago} onChange={e => setTipoPago(e.target.value)}>
+                <select className="input" value={tipoPago} onChange={e => setTipoPago(e.target.value)}>
                   <option value="contado">Contado (Efectivo)</option>
                   <option value="tarjeta">Tarjeta</option>
                   <option value="transferencia">Transferencia</option>
                   <option value="cheque">Cheque</option>
                   <option value="credito">Crédito</option>
                 </select>
-                {bloqueadoPago && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    Esta compra ya fue contabilizada — el tipo de pago y la cuenta no se pueden cambiar.
-                  </p>
-                )}
               </div>
 
-              {/* ── Selector de cuenta según tipo de pago ── */}
               {tipoPago === "contado" && cuentasCaja.length > 0 && (
                 <div>
                   <label className="label">Cuenta de caja</label>
-                  <select className="input" value={cuentaCajaId} disabled={bloqueadoPago} onChange={e => setCuentaCajaId(e.target.value)}>
+                  <select className="input" value={cuentaCajaId} onChange={e => setCuentaCajaId(e.target.value)}>
                     {cuentasCaja.map(c => (
                       <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>
                     ))}
@@ -445,7 +516,7 @@ export default function EditarCompraPage() {
               {(tipoPago === "transferencia" || tipoPago === "cheque" || tipoPago === "tarjeta") && cuentasBanco.length > 0 && (
                 <div>
                   <label className="label">Cuenta bancaria</label>
-                  <select className="input" value={cuentaBancoId} disabled={bloqueadoPago} onChange={e => setCuentaBancoId(e.target.value)}>
+                  <select className="input" value={cuentaBancoId} onChange={e => setCuentaBancoId(e.target.value)}>
                     {cuentasBanco.map(c => (
                       <option key={c.id} value={c.id}>{c.nombre} ({c.moneda})</option>
                     ))}
@@ -453,7 +524,7 @@ export default function EditarCompraPage() {
                 </div>
               )}
 
-              {!bloqueadoPago && cuentaPagoEsUSD && (
+              {cuentaPagoEsUSD && (
                 <div className="md:col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
                   <label className="label text-amber-800">Tasa de cambio (C$ por US$1)</label>
                   <input type="number" min="0" step="0.0001" className="input font-mono" placeholder="Ej: 36.6000"
@@ -491,7 +562,6 @@ export default function EditarCompraPage() {
             </div>
           </div>
 
-          {/* Líneas de detalle */}
           <div className="card">
             <h2 className="font-semibold text-slate-900 mb-4">Artículos</h2>
             <div className="space-y-4">
@@ -618,7 +688,6 @@ export default function EditarCompraPage() {
           </div>
         </div>
 
-        {/* Panel resumen */}
         <div>
           <div className="card sticky top-6">
             <h2 className="font-semibold text-slate-900 mb-4">Resumen</h2>
@@ -633,7 +702,6 @@ export default function EditarCompraPage() {
                 <span>Total factura</span><span>{formatCurrency(total)}</span>
               </div>
 
-              {/* ── Retención IR según código del catálogo DGI ── */}
               {retencionIR > 0 && retencionSel && (
                 <>
                   <div className="flex justify-between text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5 mt-2">
@@ -652,7 +720,6 @@ export default function EditarCompraPage() {
                 </>
               )}
 
-              {/* ── ISC pagado (informativo, planilla Crédito Fiscal ISC) ── */}
               <div className="pt-2">
                 <label className="label text-xs">ISC pagado en la factura <span className="text-slate-400 font-normal">(opcional)</span></label>
                 <input type="number" min="0" step="0.01" className="input text-sm font-mono" placeholder="0.00"
@@ -691,7 +758,6 @@ export default function EditarCompraPage() {
         </div>
       </div>
 
-      {/* Modal: Crear producto */}
       {showNuevoProd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="bg-white rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -763,6 +829,98 @@ export default function EditarCompraPage() {
                 {creandoProd ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><PackagePlus className="w-4 h-4" />Crear y agregar</>}
               </button>
               <button onClick={() => setShowNuevoProd(false)} className="btn-secondary px-5">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showNuevoProv && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-modal w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl">
+              <div>
+                <h3 className="font-display text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-brand-700" />
+                  Nuevo proveedor
+                </h3>
+                <p className="text-slate-400 text-xs mt-0.5">Quedará disponible para esta y futuras compras</p>
+              </div>
+              <button onClick={() => setShowNuevoProv(false)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="label">Nombre / Razón social <span className="text-red-500">*</span></label>
+                <input className="input" value={provForm.nombre}
+                  onChange={e => setProvForm(f => ({ ...f, nombre: e.target.value }))} />
+              </div>
+
+              <div>
+                <label className="label">Tipo de contribuyente <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <select className="input appearance-none pr-10" value={provForm.tipo_persona}
+                    onChange={e => setProvForm(f => ({ ...f, tipo_persona: e.target.value }))}>
+                    <option value="juridica">Persona Jurídica (empresa, S.A., SRL...)</option>
+                    <option value="natural">Persona Natural — Régimen General</option>
+                    <option value="cuota_fija">Persona Natural — Cuota Fija</option>
+                    <option value="gran_contribuyente">Gran Contribuyente</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+                {provForm.tipo_persona === "natural" && (
+                  <p className="text-amber-600 text-xs mt-1">
+                    ⚠️ Aplica retención IR 2% (Código 22) — se preseleccionará al elegir este proveedor
+                  </p>
+                )}
+                {provForm.tipo_persona === "cuota_fija" && (
+                  <p className="text-green-600 text-xs mt-1">
+                    ✓ Cuota Fija — exento de retención IR en la fuente (Art. 44 Reglamento LCT)
+                  </p>
+                )}
+                {provForm.tipo_persona === "gran_contribuyente" && (
+                  <p className="text-blue-600 text-xs mt-1">
+                    ✓ Gran Contribuyente — no sujeto a retenciones en la fuente
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">RUC / Cédula</label>
+                  <input className="input" placeholder="RUC o cédula" value={provForm.ruc}
+                    onChange={e => setProvForm(f => ({ ...f, ruc: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Persona de contacto</label>
+                  <input className="input" value={provForm.contacto}
+                    onChange={e => setProvForm(f => ({ ...f, contacto: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Teléfono</label>
+                  <input type="tel" className="input" placeholder="8888-8888" value={provForm.telefono}
+                    onChange={e => setProvForm(f => ({ ...f, telefono: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="label">Correo electrónico</label>
+                  <input type="email" className="input" value={provForm.correo}
+                    onChange={e => setProvForm(f => ({ ...f, correo: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Dirección</label>
+                <input className="input" value={provForm.direccion}
+                  onChange={e => setProvForm(f => ({ ...f, direccion: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="flex gap-3 p-5 border-t border-slate-100 sticky bottom-0 bg-white rounded-b-2xl">
+              <button onClick={handleCrearProveedor} disabled={creandoProv}
+                className="btn-primary flex-1 flex items-center justify-center gap-2">
+                {creandoProv ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><UserPlus className="w-4 h-4" />Crear y usar</>}
+              </button>
+              <button onClick={() => setShowNuevoProv(false)} className="btn-secondary px-5">Cancelar</button>
             </div>
           </div>
         </div>

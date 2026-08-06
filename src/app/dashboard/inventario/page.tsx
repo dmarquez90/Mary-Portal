@@ -6,10 +6,12 @@ import { toast } from "sonner";
 import { Plus, Package, Search, AlertTriangle, Trash2, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import type { Producto } from "@/types";
+import { EXENCIONES_IVA } from "@/lib/tributacion/exenciones-iva-catalogo";
 
 const FORM_VACIO = {
   codigo: "", nombre: "", descripcion: "", unidad_medida: "unidad",
   precio_compra: 0, precio_venta: 0, stock_actual: 0, stock_minimo: 0, aplica_iva: true,
+  exencion_iva_numeral: null as number | null,
 };
 
 export default function InventarioPage() {
@@ -61,6 +63,7 @@ export default function InventarioPage() {
       unidad_medida: p.unidad_medida, precio_compra: p.precio_compra,
       precio_venta: p.precio_venta, stock_actual: p.stock_actual,
       stock_minimo: p.stock_minimo, aplica_iva: p.aplica_iva,
+      exencion_iva_numeral: p.exencion_iva_numeral ?? null,
     });
     setShowModal(true);
   }
@@ -176,7 +179,13 @@ export default function InventarioPage() {
                       <td className="table-cell font-semibold">{formatCurrency(p.precio_venta)}</td>
                       <td className={`table-cell font-bold ${bajo ? "text-red-600" : "text-green-700"}`}>{p.stock_actual}</td>
                       <td className="table-cell text-slate-400">{p.stock_minimo}</td>
-                      <td className="table-cell">{p.aplica_iva ? <span className="badge-info">15%</span> : <span className="badge-gray">No</span>}</td>
+                      <td className="table-cell">
+                        {p.aplica_iva
+                          ? <span className="badge-info">15%</span>
+                          : <span className="badge-gray" title={p.exencion_iva_numeral ? `Art. 127 LCT, numeral ${p.exencion_iva_numeral}` : undefined}>
+                              No{p.exencion_iva_numeral ? ` (num. ${p.exencion_iva_numeral})` : ""}
+                            </span>}
+                      </td>
                       <td className="table-cell">{bajo ? <span className="badge-danger">Stock bajo</span> : <span className="badge-success">OK</span>}</td>
                       <td className="table-cell">
                         <div className="flex items-center gap-3">
@@ -224,11 +233,32 @@ export default function InventarioPage() {
               </div>
               <div>
                 <label className="label">Aplica IVA 15%</label>
-                <select className="input" value={form.aplica_iva ? "si" : "no"} onChange={e => setForm(f => ({ ...f, aplica_iva: e.target.value === "si" }))}>
+                <select
+                  className="input"
+                  value={form.aplica_iva ? "si" : "no"}
+                  onChange={e => setForm(f => ({ ...f, aplica_iva: e.target.value === "si", exencion_iva_numeral: e.target.value === "si" ? null : f.exencion_iva_numeral }))}
+                >
                   <option value="si">Sí</option>
                   <option value="no">No</option>
                 </select>
               </div>
+              {!form.aplica_iva && (
+                <div>
+                  <label className="label">Motivo de exención (Art. 127 LCT)</label>
+                  <select
+                    className="input"
+                    value={form.exencion_iva_numeral ?? ""}
+                    onChange={e => setForm(f => ({ ...f, exencion_iva_numeral: e.target.value ? Number(e.target.value) : null }))}
+                  >
+                    <option value="">Sin especificar</option>
+                    {EXENCIONES_IVA.map(ex => (
+                      <option key={ex.numeral} value={ex.numeral}>
+                        Numeral {ex.numeral} — {ex.descripcion.slice(0, 60)}{ex.descripcion.length > 60 ? "…" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="label">Precio de compra (C$)</label>
                 <input type="number" className="input" min="0" step="0.01" value={form.precio_compra} onChange={f("precio_compra")} />

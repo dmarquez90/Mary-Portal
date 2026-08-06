@@ -3,9 +3,10 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { formatCurrency, nombreMes } from "@/lib/utils";
-import { BarChart3, Download, Eye, FileSpreadsheet, Loader2, X } from "lucide-react";
+import { BarChart3, Download, Eye, FileSpreadsheet, Loader2, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { alicuotaLabel } from "@/lib/tributacion/retenciones-catalogo";
+import { ValidadorVETCompliance, type ValidacionVET } from "@/lib/validaciones/vet-compliance";
 
 /* ─── tipos ──────────────────────────────────────────────── */
 interface MesData {
@@ -327,7 +328,9 @@ export default function ReportesPage() {
   const [anioSeleccionado, setAnioSeleccionado] = useState(new Date().getFullYear());
   const [descargando,     setDescargando]     = useState<string | null>(null);
   const [loadingPreview,  setLoadingPreview]  = useState<string | null>(null);
-  const [preview,         setPreview]         = useState<{ tipo: string; label: string; datos: DatosReporte } | null>(null);
+  const [preview,         setPreview]         = useState<{ tipo: string; label: string; datos: DatosReporte; validaciones: ValidacionVET[] } | null>(null);
+  const [empresaIdActual, setEmpresaIdActual] = useState<string | null>(null);
+  const [userIdActual,    setUserIdActual]    = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -336,8 +339,10 @@ export default function ReportesPage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setUserIdActual(user.id);
 
       const empresaId = await getEmpresaIdActual(supabase, user.id);
+      setEmpresaIdActual(empresaId ?? null);
       const ids = empresaId ? [empresaId] : [];
 
       const now = new Date();
@@ -351,7 +356,7 @@ export default function ReportesPage() {
 
         return Promise.all([
           supabase.from("facturas").select("total, iva_total").in("empresa_id", ids).gte("fecha_emision", firstDay).lte("fecha_emision", lastDay).in("estado",["emitida","pagada"]),
-          supabase.from("compras").select("total, iva_total").in("empresa_id", ids).gte("fecha_compra", firstDay).lte("fecha_compra", lastDay).eq("estado","recibida"),
+          supabase.from("compras").select("total, iva_total").in("empresa_id", ids).gte("fecha_compra", firstDay).lte("fecha_compra", lastDay).eq("estado","registrada"),
         ]).then(([{ data: fac }, { data: com }]) => ({
           mes, anio,
           ventas:        fac?.reduce((s,f) => s + Number(f.total), 0) ?? 0,
@@ -375,11 +380,61 @@ export default function ReportesPage() {
     return res.json();
   }
 
+  // Validaciones de consistencia antes de declarar — lo único de valor real
+  // que tenía el módulo VET separado (eliminado 2026-08-04, consolidado aquí).
+  function calcularValidaciones(tipo: string, datos: DatosReporte): ValidacionVET[] {
+    const ventas = datos.ventas ?? [];
+    const compras = datos.compras ?? [];
+    if (tipo === "ingresos" || tipo === "ventas") {
+      const gravadas = ventas.filter(v => v.iva_total > 0).reduce((s, v) => s + v.subtotal, 0);
+      const exentas  = ventas.filter(v => v.iva_total === 0).reduce((s, v) => s + v.subtotal, 0);
+      const libroVentas = ventas.map(v => ({ subtotal: v.subtotal }));
+      return ValidadorVETCompliance.validarPlanillaIngresos(gravadas, exentas, 0, libroVentas);
+    }
+    if (tipo === "credito") {
+      const conIVA = compras.filter(c => c.iva_total > 0);
+      const comprasTotal = conIVA.reduce((s, c) => s + c.subtotal, 0);
+      const ivaAcreditable = conIVA.reduce((s, c) => s + c.iva_total, 0);
+      return ValidadorVETCompliance.validarCreditoFiscalIVA(ivaAcreditable, comprasTotal);
+    }
+    if (tipo === "retenciones") {
+      const comprasPN = compras.filter(c => c.tipo_proveedor === "natural").reduce((s, c) => s + c.subtotal, 0);
+      const retencionesIR2 = compras.reduce((s, c) => s + c.retencion_ir, 0);
+      return ValidadorVETCompliance.validarRetencionesIR(retencionesIR2, comprasPN);
+    }
+    return [];
+  }
+
+  // Deja rastro de auditoría del export (RLS exige permiso 'vet_editar').
+  async function registrarAuditoria(tipo: string, datos: DatosReporte, validaciones: ValidacionVET[]) {
+    if (!empresaIdActual || !userIdActual) return;
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const resumen = ValidadorVETCompliance.generarResumen(validaciones);
+      await supabase.from("auditoría_eventos_vet").insert({
+        empresa_id: empresaIdActual,
+        usuario_id: userIdActual,
+        tipo_evento: `exportacion_${tipo}`,
+        entidad_afectada: "reportes_dgi",
+        "período_desde": `${datos.anio ?? anioSeleccionado}-${String(datos.mes ?? mesSeleccionado).padStart(2, "0")}-01`,
+        "período_hasta": `${datos.anio ?? anioSeleccionado}-${String(datos.mes ?? mesSeleccionado).padStart(2, "0")}-28`,
+        detalles: { tipo, cantidad_ventas: datos.ventas?.length ?? 0, cantidad_compras: datos.compras?.length ?? 0 },
+        es_exitoso: resumen.es_valido,
+        errores: validaciones.filter(v => v.tipo === "error").map(v => v.mensaje),
+        advertencias: validaciones.filter(v => v.tipo === "warning").map(v => v.mensaje),
+      });
+    } catch {
+      // No bloquear la descarga si falla el registro de auditoría —
+      // el archivo ya se generó y es lo que el usuario necesita ahora.
+    }
+  }
+
   async function previsualizarReporte(tipo: string, label: string) {
     setLoadingPreview(tipo);
     try {
       const datos = await fetchDatos(tipo);
-      setPreview({ tipo, label, datos });
+      setPreview({ tipo, label, datos, validaciones: calcularValidaciones(tipo, datos) });
     } catch {
       toast.error("Error al cargar la previsualización");
     } finally {
@@ -391,6 +446,8 @@ export default function ReportesPage() {
     setDescargando(tipo);
     try {
       const datos = datosExternos ?? await fetchDatos(tipo);
+      const validaciones = calcularValidaciones(tipo, datos);
+      void registrarAuditoria(tipo, datos, validaciones);
       const XLSX = await import("xlsx-js-style" as string) as typeof import("xlsx");
       let wb = XLSX.utils.book_new();
       const mesNombre = nombreMes(datos.mes ?? mesSeleccionado);
@@ -458,29 +515,13 @@ export default function ReportesPage() {
           XLSX.utils.sheet_add_aoa(ws1, [[valor]], { origin: celda });
         }
 
-        // Rango de facturas por serie (desde la fila 27, bajo el encabezado
-        // "Sucursales" de la fila 26): el número puede venir como "F-000123";
-        // agrupar por prefijo de serie y tomar min/max numérico, no
-        // lexicográfico (evita que "F-000010" quede antes que "F-000009").
-        if (ventas.length > 0) {
-          const porSerie = new Map<string, { min: string; max: string; minN: number; maxN: number }>();
-          for (const v of ventas) {
-            const num = v.numero_factura ?? "";
-            const serie = num.includes("-") ? num.split("-")[0] : "";
-            const n = parseInt(num.replace(/\D/g, ""), 10) || 0;
-            const actual = porSerie.get(serie);
-            if (!actual) porSerie.set(serie, { min: num, max: num, minN: n, maxN: n });
-            else {
-              if (n < actual.minN) { actual.min = num; actual.minN = n; }
-              if (n > actual.maxN) { actual.max = num; actual.maxN = n; }
-            }
-          }
-          let fila = 27;
-          for (const [serie, r] of porSerie) {
-            XLSX.utils.sheet_add_aoa(ws1, [[empresa, r.min, r.max, serie]], { origin: `A${fila}` });
-            fila++;
-          }
-        }
+        // FIX auditoría 2026-08-04: este bloque escribía, desde la fila 27,
+        // el NOMBRE DE LA EMPRESA como si fuera una "sucursal" real. Eso no
+        // corresponde a ningún archivo que la VET real acepte — la Planilla
+        // de Ingresos oficial termina en la fila 25, columna B. El archivo
+        // real de sucursales ("Sucursales con Facturas Utilizadas") es un
+        // archivo aparte con su propia estructura, que requiere modelar
+        // sucursales (no existe hoy en el ERP) — queda pendiente a futuro.
 
       } else if (tipo === "credito") {
         // Plantilla oficial de Crédito Fiscal IVA: se llena la plantilla real
@@ -690,6 +731,24 @@ export default function ReportesPage() {
             </div>
             {/* Body scrollable */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
+              {preview.validaciones.length > 0 && (
+                <div className="mb-4 space-y-2">
+                  {preview.validaciones.map((v, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-start gap-2 rounded-lg p-3 text-xs ${
+                        v.tipo === "error" ? "bg-red-50 text-red-800 border border-red-200" : "bg-amber-50 text-amber-800 border border-amber-200"
+                      }`}
+                    >
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p>{v.mensaje}</p>
+                        <p className="opacity-70 mt-0.5">{v.referenciaLey}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <PreviewContent tipo={preview.tipo} datos={preview.datos} />
             </div>
             {/* Footer modal */}
